@@ -38,7 +38,7 @@
       "创建测试脚本 test_task.m，加载示例任务并验证字段正确性",
       "将提供的5个任务转换为 data/task_list.mat"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 4,

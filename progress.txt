@@ -45,3 +45,21 @@
 - `move(dt)` 采用连续位置推进，路径节点仍保持栅格中心点表示，便于后续接入路径规划结果
 - `load(elapsedTime)` 和 `unload(elapsedTime)` 支持按时间片累计推进，适合仿真主循环逐步调用
 - MATLAB 在 `createAgvPool` 结束后输出了一次 Java shutdown 日志，但文件已成功生成且命令成功返回
+
+## [2026-04-01] - Task: 任务建模
+
+### What was done:
+- 首先检查仓库现状并确认缺少“提供的 5 个任务”原始输入，按规范记录阻塞
+- 在收到任务定义后，新增 `+task/TaskClass.m`，实现任务属性、航点归一化、状态更新、航点访问接口和序列化
+- 新增 `+task/TaskParser.m`，支持从 `JSON` 和 `MAT` 两种格式加载任务列表
+- 新增 `data/createTaskList.m`，将提供的 5 个任务写入 `data/task_list.json` 和 `data/task_list.mat`
+- 新增 `tests/test_task.m`，覆盖 JSON/MAT 解析、任务字段验证、状态更新和结构化输出
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createTaskList"`，成功生成 `data/task_list.json` 和 `data/task_list.mat`
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_task"`，结果通过
+
+### Notes:
+- 本次将 5 个任务的 `priority` 统一初始化为 `1`
+- 本次将 5 个任务的 `requestTime` 初始化为 `0, 10, 20, 30, 40` 秒，以保留明确的 FIFO 顺序
+- 任务初始 `status` 统一设为 `pending`
