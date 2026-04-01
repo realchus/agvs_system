@@ -25,7 +25,7 @@
       "创建测试脚本 test_agv.m，测试移动和装卸货逻辑",
       "将AGV池初始数据保存到 data/agv_pool.mat"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 3,

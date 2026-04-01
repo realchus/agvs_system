@@ -29,3 +29,19 @@
 ### Notes:
 - 当前货架临时开放逻辑通过 `registerTaskTarget(taskId, positions)` 注入目标位置，便于后续任务模块集成
 - 地图静态布局保存在 `baseGrid`，动态 AGV 占用叠加在 `grid`，后续路径规划可直接复用 `isPassable`
+
+## [2026-04-01] - Task: AGV建模
+
+### What was done:
+- 新增 `+agv/AGVClass.m`，实现 AGV 基础属性、任务绑定、路径分配、按速度推进的 `move(dt)`、装卸计时、状态更新和序列化接口
+- 新增 `tests/test_agv.m`，覆盖路径移动、节点到达、装货、卸货、状态切换和默认 AGV 池验证
+- 新增 `data/createAgvPool.m` 并生成 `data/agv_pool.mat`
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createAgvPool"`，成功生成 `data/agv_pool.mat`
+
+### Notes:
+- `move(dt)` 采用连续位置推进，路径节点仍保持栅格中心点表示，便于后续接入路径规划结果
+- `load(elapsedTime)` 和 `unload(elapsedTime)` 支持按时间片累计推进，适合仿真主循环逐步调用
+- MATLAB 在 `createAgvPool` 结束后输出了一次 Java shutdown 日志，但文件已成功生成且命令成功返回
