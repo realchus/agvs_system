@@ -94,3 +94,21 @@
 ### Notes:
 - 当前 `reservePath` 采用原子式预留，只要路径中任一边段冲突就不会写入任何新时间窗
 - 时间区间采用左闭右开式重叠判断，前一段结束时刻等于后一段开始时刻不视为冲突
+
+## [2026-04-01] - Task: 半离线路径库生成
+
+### What was done:
+- 新增 `+pathplan/PathLibrary.m`，实现单任务多候选路径生成、批量任务路径库生成和保存接口
+- 复用 `AStar` 与 `TimeWindowManager`，为每条候选路径附加基于固定速度的时间窗序列
+- 通过屏蔽已发现路径的内部节点来生成变体路径，以得到多条备选路线
+- 新增 `data/createPathLibrary.m` 并生成 `data/path_library.mat`
+- 新增 `tests/test_pathlibrary.m`，覆盖简单地图上的多路径生成、批量任务生成和库文件落盘
+- 调整 `MapClass.isPassable`，允许被当前任务注册为目标点的工作窗口位置通过，并补充对应测试
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_pathlibrary"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createPathLibrary"`，成功生成 `data/path_library.mat`
+
+### Notes:
+- 当前路径库按任务保存候选路径，默认请求每个任务最多 3 条候选路线
+- 若在当前地图约束下无法生成足够多的不同路线，生成结果会保留已有的可行路径并记录实际数量

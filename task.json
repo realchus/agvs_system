@@ -80,7 +80,7 @@
       "将路径库保存到 data/path_library.mat",
       "测试生成任务的路径库"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 7,

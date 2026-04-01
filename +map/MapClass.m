@@ -68,7 +68,7 @@ classdef MapClass < handle
             switch cellValue
                 case 0
                     tf = true;
-                case {1, 4}
+                case {1, 3, 4}
                     tf = obj.isTaskTarget(row, col, taskId);
                 otherwise
                     tf = false;
