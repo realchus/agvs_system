@@ -1,0 +1,412 @@
+classdef Simulation < handle
+    %SIMULATION Discrete-time warehouse simulation main loop.
+    %   The simulation advances AGVs, assigns pending tasks, resolves
+    %   conflicts, handles load/unload timing, and optionally renders the
+    %   state in real time.
+
+    properties
+        map
+        agvPool
+        taskList
+        scheduler
+        timeWindowManager
+        visualizer
+        config
+        currentTime
+        eventLog
+        serviceStates
+    end
+
+    methods
+        function obj = Simulation(mapObj, agvPool, taskList, config, schedulerObj, visualizerObj, timeWindowManager)
+            %SIMULATION Construct a simulation instance.
+            if nargin < 1 || isempty(mapObj)
+                mapObj = map.MapClass.createDefaultMap();
+            end
+            if nargin < 2 || isempty(agvPool)
+                agvPool = agv.AGVClass.createDefaultPool();
+            end
+            if nargin < 3 || isempty(taskList)
+                taskList = task.TaskParser(fullfile(pwd, 'data', 'task_list.mat'));
+            end
+            if nargin < 4 || isempty(config)
+                config = params();
+            end
+
+            if nargin < 7 || isempty(timeWindowManager)
+                timeWindowManager = timewindow.TimeWindowManager();
+            end
+
+            if nargin < 5 || isempty(schedulerObj)
+                pathLibraryData = [];
+                if isstruct(config) && isfield(config, 'pathLibraryData')
+                    pathLibraryData = config.pathLibraryData;
+                end
+                schedulerObj = scheduler.SchedulerClass( ...
+                    mapObj, agvPool, taskList, pathLibraryData, timeWindowManager);
+            end
+
+            if nargin < 6 || isempty(visualizerObj)
+                renderEnabled = sim.Simulation.configValue(config, 'enableVisualization', false);
+                renderVisible = sim.Simulation.configValue(config, 'visualizerVisible', renderEnabled);
+                visualizerObj = sim.Visualizer(renderEnabled, renderVisible);
+            end
+
+            obj.map = mapObj;
+            obj.agvPool = agvPool;
+            obj.taskList = taskList;
+            obj.scheduler = schedulerObj;
+            obj.timeWindowManager = timeWindowManager;
+            obj.visualizer = visualizerObj;
+            obj.config = config;
+            obj.currentTime = 0.0;
+            obj.eventLog = sim.Simulation.emptyEventLog();
+            obj.serviceStates = containers.Map('KeyType', 'double', 'ValueType', 'any');
+
+            obj.syncMapOccupancy();
+            obj.initializeAssignedTasks();
+        end
+
+        function results = run(obj)
+            %RUN Execute the simulation until time limit or task completion.
+            obj.logEvent('simulation_started', 0, 0, 'Simulation started.');
+
+            totalTime = sim.Simulation.configValue(obj.config, 'totalTime', 120.0);
+            while obj.currentTime < totalTime && ~obj.allTasksCompleted()
+                obj.step();
+            end
+
+            obj.logEvent('simulation_finished', 0, 0, 'Simulation finished.');
+            results = struct( ...
+                'currentTime', obj.currentTime, ...
+                'completedTaskCount', sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList)), ...
+                'eventLog', obj.eventLog);
+        end
+
+        function step(obj)
+            %STEP Advance the simulation by one configured time step.
+            dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
+
+            obj.assignPendingTasks();
+            obj.resolveActiveConflicts();
+
+            dynamicObstacles = obj.getDynamicObstacles();
+            for i = 1:numel(obj.agvPool)
+                obj.advanceAgv(obj.agvPool(i), dt, dynamicObstacles);
+            end
+
+            obj.syncMapOccupancy();
+            obj.visualizer.render(obj.map, obj.agvPool, obj.currentTime, dynamicObstacles);
+            obj.currentTime = obj.currentTime + dt;
+        end
+    end
+
+    methods (Access = private)
+        function assignPendingTasks(obj)
+            orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
+            idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
+            idleAgvs = obj.agvPool(idleMask);
+
+            for i = 1:numel(idleAgvs)
+                nextTask = obj.findAssignableTask(orderedTasks);
+                if isempty(nextTask)
+                    return;
+                end
+
+                obj.map.registerTaskTarget(nextTask.id, [nextTask.start; nextTask.getWaypointPositions()]);
+                [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(idleAgvs(i), nextTask, obj.currentTime);
+                if ~success
+                    obj.logEvent('task_assignment_failed', idleAgvs(i).id, nextTask.id, 'No feasible route could be reserved.');
+                    continue;
+                end
+
+                nextTask.updateStatus('executing');
+                obj.serviceStates(idleAgvs(i).id) = struct( ...
+                    'taskId', nextTask.id, ...
+                    'nextWaypointIndex', 1, ...
+                    'phase', 'travel');
+                obj.logEvent('task_assigned', idleAgvs(i).id, nextTask.id, ...
+                    sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
+            end
+        end
+
+        function nextTask = findAssignableTask(obj, orderedTasks)
+            nextTask = [];
+            for i = 1:numel(orderedTasks)
+                if strcmp(orderedTasks(i).status, 'pending') && orderedTasks(i).requestTime <= obj.currentTime
+                    nextTask = orderedTasks(i);
+                    return;
+                end
+            end
+        end
+
+        function resolveActiveConflicts(obj)
+            waitTimeout = sim.Simulation.configValue(obj.config, 'waitTimeout', 5.0);
+            for i = 1:numel(obj.agvPool)
+                for j = (i + 1):numel(obj.agvPool)
+                    agvA = obj.agvPool(i);
+                    agvB = obj.agvPool(j);
+                    if isempty(agvA.timeWindows) || isempty(agvB.timeWindows)
+                        continue;
+                    end
+
+                    [resolved, info] = obj.scheduler.handleConflict(agvA, agvB, obj.currentTime, waitTimeout);
+                    if strcmp(info.strategy, 'none')
+                        continue;
+                    end
+
+                    if resolved
+                        obj.logEvent('conflict_resolved', info.adjustedAgvId, 0, info.message);
+                    else
+                        obj.logEvent('conflict_unresolved', agvA.id, 0, info.message);
+                    end
+                end
+            end
+        end
+
+        function advanceAgv(obj, agvObj, dt, dynamicObstacles)
+            if strcmp(agvObj.state, 'waiting')
+                if isempty(agvObj.timeWindows) || obj.currentTime >= agvObj.timeWindows(1).startTime - eps
+                    agvObj.updateState('moving');
+                else
+                    return;
+                end
+            end
+
+            if strcmp(agvObj.state, 'loading')
+                completed = agvObj.load(dt);
+                if completed
+                    obj.finishLoading(agvObj);
+                end
+                return;
+            end
+
+            if strcmp(agvObj.state, 'unloading')
+                completed = agvObj.unload(dt);
+                if completed
+                    obj.completeTask(agvObj);
+                end
+                return;
+            end
+
+            if isempty(agvObj.currentTask)
+                return;
+            end
+
+            context = struct( ...
+                'map', obj.map, ...
+                'dynamicObstacles', dynamicObstacles, ...
+                'timeWindowManager', obj.timeWindowManager, ...
+                'currentTime', obj.currentTime);
+            [reachedNode, ~, moveInfo] = agvObj.move(dt, context);
+
+            if moveInfo.avoidanceTriggered
+                obj.logEvent('dynamic_avoidance', agvObj.id, obj.primaryTaskId(agvObj), ...
+                    sprintf('Applied %s local avoidance.', moveInfo.strategy));
+            end
+            if moveInfo.replannedAfterConflict
+                obj.logEvent('path_replanned', agvObj.id, obj.primaryTaskId(agvObj), ...
+                    'Replanned remaining route after avoidance conflict.');
+            elseif moveInfo.conflictDetected
+                obj.logEvent('avoidance_conflict', agvObj.id, obj.primaryTaskId(agvObj), ...
+                    'Avoidance route encountered a reservation conflict.');
+            end
+
+            if reachedNode
+                obj.handleWaypointArrival(agvObj);
+            end
+        end
+
+        function handleWaypointArrival(obj, agvObj)
+            if ~isKey(obj.serviceStates, agvObj.id)
+                return;
+            end
+
+            state = obj.serviceStates(agvObj.id);
+            taskObj = obj.primaryTask(agvObj);
+            if isempty(taskObj)
+                return;
+            end
+
+            waypointPositions = taskObj.getWaypointPositions();
+            if isempty(waypointPositions) || state.nextWaypointIndex > size(waypointPositions, 1)
+                return;
+            end
+
+            targetPosition = waypointPositions(state.nextWaypointIndex, :);
+            if norm(agvObj.position - targetPosition) > 1e-9
+                return;
+            end
+
+            if state.nextWaypointIndex < size(waypointPositions, 1)
+                agvObj.load(0.0);
+                state.phase = 'loading';
+                obj.serviceStates(agvObj.id) = state;
+                obj.logEvent('loading_started', agvObj.id, taskObj.id, ...
+                    sprintf('Started loading at waypoint %d.', state.nextWaypointIndex));
+            else
+                agvObj.unload(0.0);
+                state.phase = 'unloading';
+                obj.serviceStates(agvObj.id) = state;
+                obj.logEvent('unloading_started', agvObj.id, taskObj.id, ...
+                    'Started unloading at final waypoint.');
+            end
+        end
+
+        function finishLoading(obj, agvObj)
+            if ~isKey(obj.serviceStates, agvObj.id)
+                return;
+            end
+
+            state = obj.serviceStates(agvObj.id);
+            state.nextWaypointIndex = state.nextWaypointIndex + 1;
+            state.phase = 'travel';
+            obj.serviceStates(agvObj.id) = state;
+            agvObj.updateState('moving');
+            obj.logEvent('loading_completed', agvObj.id, obj.primaryTaskId(agvObj), 'Loading completed.');
+        end
+
+        function completeTask(obj, agvObj)
+            taskObj = obj.primaryTask(agvObj);
+            if isempty(taskObj)
+                return;
+            end
+
+            taskObj.updateStatus('completed');
+            obj.map.clearTaskTarget(taskObj.id);
+            obj.timeWindowManager.releasePath(agvObj.id);
+            agvObj.setTimeWindows(timewindow.TimeWindowManager.emptyWindowArray());
+            agvObj.assignTask([]);
+            agvObj.updateState('idle');
+
+            if isKey(obj.serviceStates, agvObj.id)
+                remove(obj.serviceStates, agvObj.id);
+            end
+
+            obj.logEvent('task_completed', agvObj.id, taskObj.id, 'Task completed.');
+        end
+
+        function taskObj = primaryTask(~, agvObj)
+            taskObj = [];
+            if isa(agvObj.currentTask, 'task.TaskClass') && ~isempty(agvObj.currentTask)
+                taskObj = agvObj.currentTask(1);
+            end
+        end
+
+        function taskId = primaryTaskId(obj, agvObj)
+            taskObj = obj.primaryTask(agvObj);
+            if isempty(taskObj)
+                taskId = 0;
+            else
+                taskId = taskObj.id;
+            end
+        end
+
+        function syncMapOccupancy(obj)
+            for i = 1:numel(obj.agvPool)
+                obj.map.clearAGVOccupancy(obj.agvPool(i).id);
+            end
+
+            for i = 1:numel(obj.agvPool)
+                agvObj = obj.agvPool(i);
+                taskId = obj.primaryTaskId(agvObj);
+                if taskId == 0
+                    taskId = [];
+                end
+                gridPosition = round(agvObj.position);
+                obj.map.setAGVOccupancy(agvObj.id, gridPosition(1), gridPosition(2), taskId);
+            end
+        end
+
+        function initializeAssignedTasks(obj)
+            for i = 1:numel(obj.agvPool)
+                agvObj = obj.agvPool(i);
+                taskObj = obj.primaryTask(agvObj);
+                if isempty(taskObj)
+                    continue;
+                end
+
+                obj.map.registerTaskTarget(taskObj.id, [taskObj.start; taskObj.getWaypointPositions()]);
+                obj.serviceStates(agvObj.id) = struct( ...
+                    'taskId', taskObj.id, ...
+                    'nextWaypointIndex', 1, ...
+                    'phase', 'travel');
+            end
+        end
+
+        function dynamicObstacles = getDynamicObstacles(obj)
+            schedule = sim.Simulation.configValue(obj.config, 'dynamicObstacleSchedule', repmat(struct(), 0, 1));
+            dynamicObstacles = zeros(0, 2);
+            dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
+
+            for i = 1:numel(schedule)
+                entry = schedule(i);
+                if isfield(entry, 'startTime')
+                    startTime = entry.startTime;
+                elseif isfield(entry, 'time')
+                    startTime = entry.time;
+                else
+                    startTime = 0.0;
+                end
+
+                if isfield(entry, 'endTime')
+                    endTime = entry.endTime;
+                else
+                    endTime = startTime + dt;
+                end
+
+                if obj.currentTime >= startTime && obj.currentTime < endTime && isfield(entry, 'positions')
+                    dynamicObstacles = [dynamicObstacles; double(entry.positions)]; %#ok<AGROW>
+                end
+            end
+        end
+
+        function tf = allTasksCompleted(obj)
+            tf = all(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+        end
+
+        function logEvent(obj, type, agvId, taskId, message)
+            entry = struct( ...
+                'time', obj.currentTime, ...
+                'type', char(string(type)), ...
+                'agvId', double(agvId), ...
+                'taskId', double(taskId), ...
+                'message', char(string(message)));
+            obj.eventLog(end + 1, 1) = entry; %#ok<AGROW>
+        end
+    end
+
+    methods (Static)
+        function obj = fromDefaults(config)
+            %FROMDEFAULTS Build a simulation using default project data.
+            if nargin < 1 || isempty(config)
+                config = params();
+            end
+
+            obj = sim.Simulation( ...
+                map.MapClass.createDefaultMap(), ...
+                agv.AGVClass.createDefaultPool(), ...
+                task.TaskParser(fullfile(pwd, 'data', 'task_list.mat')), ...
+                config);
+        end
+
+        function value = configValue(config, fieldName, defaultValue)
+            %CONFIGVALUE Read a config field or return a default.
+            if isstruct(config) && isfield(config, fieldName) && ~isempty(config.(fieldName))
+                value = config.(fieldName);
+            else
+                value = defaultValue;
+            end
+        end
+
+        function eventLog = emptyEventLog()
+            %EMPTYEVENTLOG Return an empty event-log struct array.
+            eventLog = repmat(struct( ...
+                'time', 0.0, ...
+                'type', '', ...
+                'agvId', 0, ...
+                'taskId', 0, ...
+                'message', ''), 0, 1);
+        end
+    end
+end

@@ -137,7 +137,7 @@
       "设置实时刷新（drawnow）",
       "编写 main.m 入口，读取参数和初始数据，启动仿真"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 11,

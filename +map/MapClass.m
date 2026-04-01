@@ -75,16 +75,20 @@ classdef MapClass < handle
             end
         end
 
-        function setAGVOccupancy(obj, agvId, row, col)
+        function setAGVOccupancy(obj, agvId, row, col, taskId)
             %SETAGVOCCUPANCY Set or move an AGV occupancy marker.
             % Inputs:
             %   agvId    - AGV identifier.
             %   row, col - Target grid coordinate.
+            %   taskId   - Optional task identifier for target-window access.
+            if nargin < 5
+                taskId = [];
+            end
             if ~obj.isInside(row, col)
                 error('MapClass:OutOfBounds', 'AGV position (%d, %d) is out of bounds.', row, col);
             end
 
-            if ~obj.isPassable(row, col, agvId, [])
+            if ~obj.isPassable(row, col, agvId, taskId)
                 error('MapClass:NotPassable', 'Cell (%d, %d) is not passable for AGV %d.', row, col, agvId);
             end
 

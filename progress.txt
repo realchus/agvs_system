@@ -174,8 +174,7 @@
 ### What was done:
 
 - 新增 `+pathplan/DWAClass.m`，实现局部动态窗口采样、候选方向评分和与全局路径的重连
-- 扩展 `+agv/AGVClass.m`，在 `move(dt, context)` 中支持检测前方动态障碍物并触发 DWA 局部避障
-- 为 AGV 新增局部避障后的剩余路径替换、旧时间窗失效记录和冲突后二次重规划逻辑
+- 扩展 `+agv/AGVClass.m`，在 `move(dt, context)` 中支持检测前方动态障碍、触发 DWA 局部避障并替换剩余路径
 - 扩展 `+timewindow/TimeWindowManager.m`，新增 `invalidatedWindows` 和 `invalidatePath`，用于将受动态障碍影响的旧路径时间窗标记为不可用
 - 新增 `tests/test_dwa.m`，覆盖动态障碍触发局部避障，以及避障后发生时间窗冲突并重新规划剩余路径两类场景
 
@@ -189,3 +188,25 @@
 
 - 当前 DWA 实现采用“短视野采样 + A* 重连”的轻量方案，适合当前栅格路径与仿真框架
 - `AGV.move` 保持向后兼容；未传入 `context` 时仍按原有固定路径推进逻辑运行
+
+## [2026-04-01] - Task: 仿真主循环与可视化
+
+### What was done:
+
+- 新增 `+sim/Simulation.m`，实现离散时间主循环、任务分配、冲突处理、AGV 更新、装卸节拍和事件日志
+- 新增 `+sim/Visualizer.m`，实现地图、AGV、路径和动态障碍的实时绘制
+- 新增 `params.m`，统一提供默认仿真步长、总时长、可视化开关、等待超时和动态障碍配置
+- 新增 `main.m`，作为默认仿真入口，读取参数并启动 `Simulation`
+- 调整 `+map/MapClass.m` 的 `setAGVOccupancy`，允许携带当前任务 ID 以支持目标窗口位置占用
+- 调整 `+scheduler/SchedulerClass.m`，区分“未传路径库”和“显式传入空路径库”，便于小地图仿真测试
+- 新增 `tests/test_simulation.m`，覆盖单任务完整执行生命周期和仿真步内冲突解决集成场景
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation"`，结果全部通过
+
+### Notes:
+
+- 当前仿真默认支持无界面运行，便于测试；开启 `enableVisualization` 后会实时绘制地图和 AGV 轨迹
+- 仿真主循环已经接入任务调度、时间窗冲突解决和 DWA 局部避障，足够支撑下一步完整场景测试

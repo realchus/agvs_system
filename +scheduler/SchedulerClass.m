@@ -33,7 +33,7 @@ classdef SchedulerClass < handle
             if nargin < 3 || isempty(taskList)
                 taskList = task.TaskParser(fullfile(pwd, 'data', 'task_list.mat'));
             end
-            if nargin < 4 || isempty(pathLibraryData)
+            if nargin < 4
                 pathLibraryData = scheduler.SchedulerClass.loadDefaultPathLibrary();
             end
             if nargin < 5 || isempty(timeWindowManager)
