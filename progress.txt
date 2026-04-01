@@ -112,3 +112,21 @@
 ### Notes:
 - 当前路径库按任务保存候选路径，默认请求每个任务最多 3 条候选路线
 - 若在当前地图约束下无法生成足够多的不同路线，生成结果会保留已有的可行路径并记录实际数量
+
+## [2026-04-01] - Task: 任务调度器
+
+### What was done:
+- 新增 `+scheduler/SchedulerClass.m`，实现调度器核心结构
+- 实现 `updatePriority`，按基础优先级加等待时间加权，并用 `requestTime` 保持 FIFO 排序
+- 实现 `getNextTask`，返回当前优先级最高的待执行任务
+- 实现 `assignToAGV`，先查询路径库，再为候选路径尝试全局时间窗预留，成功后绑定 AGV、任务与路径
+- 实现 `mergePickup`，识别 AGV 当前路径上可顺路完成的待执行任务并合并
+- 实现 `emergencyInsert`，通过高优先级偏移将紧急任务插入队列前部
+- 新增 `tests/test_scheduler.m`，覆盖任务排序、路径库优先分配、顺路合并和紧急插队
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过
+
+### Notes:
+- 当前 `assignToAGV` 在存在路径库时会优先尝试库中的候选路径；若路径库缺失，则回退到基于 `AStar` 的单路径生成
+- 当前 `mergePickup` 采用“任务起点与航点都位于 AGV 现有路径上且顺序一致”作为合并条件，便于后续继续细化合并策略

@@ -95,7 +95,7 @@
       "实现 emergencyInsert 方法，将紧急任务插队到最前",
       "编写测试脚本 test_scheduler.m，模拟任务分配和插队"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 8,
