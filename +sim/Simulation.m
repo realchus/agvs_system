@@ -112,6 +112,7 @@ classdef Simulation < handle
 
     methods (Access = private)
         function assignPendingTasks(obj)
+            %ASSIGNPENDINGTASKS Dispatch ready tasks to idle AGVs.
             orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
             idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
             idleAgvs = obj.agvPool(idleMask);
@@ -140,6 +141,7 @@ classdef Simulation < handle
         end
 
         function nextTask = findAssignableTask(obj, orderedTasks)
+            %FINDASSIGNABLETASK Return the first pending task whose request time has arrived.
             nextTask = [];
             for i = 1:numel(orderedTasks)
                 if strcmp(orderedTasks(i).status, 'pending') && orderedTasks(i).requestTime <= obj.currentTime
@@ -150,6 +152,7 @@ classdef Simulation < handle
         end
 
         function resolveActiveConflicts(obj)
+            %RESOLVEACTIVECONFLICTS Run pairwise reservation conflict handling.
             waitTimeout = sim.Simulation.configValue(obj.config, 'waitTimeout', 5.0);
             for i = 1:numel(obj.agvPool)
                 for j = (i + 1):numel(obj.agvPool)
@@ -174,6 +177,7 @@ classdef Simulation < handle
         end
 
         function advanceAgv(obj, agvObj, dt, dynamicObstacles)
+            %ADVANCEAGV Progress one AGV through movement or service states.
             previousPosition = agvObj.position;
 
             if strcmp(agvObj.state, 'waiting')
@@ -231,6 +235,7 @@ classdef Simulation < handle
         end
 
         function handleWaypointArrival(obj, agvObj)
+            %HANDLEWAYPOINTARRIVAL Trigger loading or unloading at target nodes.
             if ~isKey(obj.serviceStates, agvObj.id)
                 return;
             end
@@ -267,6 +272,7 @@ classdef Simulation < handle
         end
 
         function finishLoading(obj, agvObj)
+            %FINISHLOADING Resume travel after a loading operation completes.
             if ~isKey(obj.serviceStates, agvObj.id)
                 return;
             end
@@ -280,6 +286,7 @@ classdef Simulation < handle
         end
 
         function completeTask(obj, agvObj)
+            %COMPLETETASK Finalize one task and release AGV resources.
             taskObj = obj.primaryTask(agvObj);
             if isempty(taskObj)
                 return;
@@ -301,6 +308,7 @@ classdef Simulation < handle
         end
 
         function taskObj = primaryTask(~, agvObj)
+            %PRIMARYTASK Return the first task bound to the AGV, if any.
             taskObj = [];
             if isa(agvObj.currentTask, 'task.TaskClass') && ~isempty(agvObj.currentTask)
                 taskObj = agvObj.currentTask(1);
@@ -308,6 +316,7 @@ classdef Simulation < handle
         end
 
         function taskId = primaryTaskId(obj, agvObj)
+            %PRIMARYTASKID Return the primary task id or zero when idle.
             taskObj = obj.primaryTask(agvObj);
             if isempty(taskObj)
                 taskId = 0;
@@ -317,6 +326,7 @@ classdef Simulation < handle
         end
 
         function syncMapOccupancy(obj)
+            %SYNCMAPOCCUPANCY Mirror AGV positions onto the dynamic map layer.
             for i = 1:numel(obj.agvPool)
                 obj.map.clearAGVOccupancy(obj.agvPool(i).id);
             end
@@ -333,6 +343,7 @@ classdef Simulation < handle
         end
 
         function initializeAssignedTasks(obj)
+            %INITIALIZEASSIGNEDTASKS Restore service state for preassigned AGVs.
             for i = 1:numel(obj.agvPool)
                 agvObj = obj.agvPool(i);
                 taskObj = obj.primaryTask(agvObj);
@@ -349,6 +360,7 @@ classdef Simulation < handle
         end
 
         function dynamicObstacles = getDynamicObstacles(obj)
+            %GETDYNAMICOBSTACLES Return currently active dynamic obstacle positions.
             schedule = sim.Simulation.configValue(obj.config, 'dynamicObstacleSchedule', repmat(struct(), 0, 1));
             dynamicObstacles = zeros(0, 2);
             dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
@@ -376,10 +388,12 @@ classdef Simulation < handle
         end
 
         function tf = allTasksCompleted(obj)
+            %ALLTASKSCOMPLETED Return true when every task is marked completed.
             tf = all(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
         end
 
         function logEvent(obj, type, agvId, taskId, message)
+            %LOGEVENT Append a simulation event entry to the in-memory log.
             entry = struct( ...
                 'time', obj.currentTime, ...
                 'type', char(string(type)), ...
@@ -390,6 +404,7 @@ classdef Simulation < handle
         end
 
         function recordTravelDistance(obj, agvId, previousPosition, currentPosition)
+            %RECORDTRAVELDISTANCE Accumulate AGV travel distance for reporting.
             if ~isKey(obj.agvTravelDistance, agvId)
                 obj.agvTravelDistance(agvId) = 0.0;
             end
@@ -399,6 +414,7 @@ classdef Simulation < handle
         end
 
         function metrics = buildMetrics(obj)
+            %BUILDMETRICS Export scenario-level summary metrics.
             metrics = struct();
             metrics.totalTime = obj.currentTime;
             metrics.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
@@ -412,6 +428,7 @@ classdef Simulation < handle
         end
 
         function agvDistances = exportAgvDistances(obj)
+            %EXPORTAGVDISTANCES Convert AGV distance counters into a struct array.
             keysList = sort(cell2mat(obj.agvTravelDistance.keys));
             agvDistances = repmat(struct('agvId', 0, 'distance', 0.0), numel(keysList), 1);
             for i = 1:numel(keysList)
@@ -422,6 +439,7 @@ classdef Simulation < handle
         end
 
         function completionTimes = exportTaskCompletionTimes(obj)
+            %EXPORTTASKCOMPLETIONTIMES Export task finish timestamps for reporting.
             completionTimes = repmat(struct('taskId', 0, 'completionTime', 0.0), 0, 1);
             if isempty(obj.taskCompletionTimes)
                 return;

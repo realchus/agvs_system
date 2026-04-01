@@ -128,6 +128,7 @@ classdef DWAClass < handle
 
     methods (Access = private)
         function [tf, obstacleIndex] = detectObstacleAhead(obj, globalPath, obstacles)
+            %DETECTOBSTACLEAHEAD Check whether the near-future route is blocked.
             tf = false;
             obstacleIndex = 0;
             lookaheadCount = min(size(globalPath, 1), obj.lookaheadSteps + 1);
@@ -141,6 +142,7 @@ classdef DWAClass < handle
         end
 
         function reconnectGoal = selectReconnectGoal(~, globalPath, obstacles, obstacleIndex)
+            %SELECTRECONNECTGOAL Pick the next reachable node after the blockage.
             reconnectGoal = globalPath(end, :);
             startIdx = min(size(globalPath, 1), max(2, obstacleIndex + 1));
             for i = startIdx:size(globalPath, 1)
@@ -152,6 +154,7 @@ classdef DWAClass < handle
         end
 
         function controls = sampleControls(obj, agvObj)
+            %SAMPLECONTROLS Enumerate short-horizon velocity and heading samples.
             speedValues = linspace(obj.minSpeed, obj.maxSpeed, obj.speedSamples);
             headingSequence = pathplan.DWAClass.headingPriority(agvObj);
             controls = repmat(struct('speed', 0.0, 'direction', [0, 0]), ...
@@ -169,6 +172,7 @@ classdef DWAClass < handle
         end
 
         function suffix = suffixFromGoal(~, globalPath, reconnectGoal)
+            %SUFFIXFROMGOAL Return the remaining route after the reconnect node.
             suffix = reconnectGoal;
             for i = 1:size(globalPath, 1)
                 if isequal(globalPath(i, :), reconnectGoal)
@@ -179,6 +183,7 @@ classdef DWAClass < handle
         end
 
         function score = scoreCandidate(obj, candidatePath, control, obstacles, globalPath, reconnectGoal)
+            %SCORECANDIDATE Evaluate one locally avoided path candidate.
             localPrefix = candidatePath(1:min(end, obj.lookaheadSteps + 1), :);
             clearance = obj.computeClearance(localPrefix, obstacles);
             if isinf(clearance)
@@ -198,6 +203,7 @@ classdef DWAClass < handle
         end
 
         function clearance = computeClearance(~, pathNodes, obstacles)
+            %COMPUTECLEARANCE Measure the closest obstacle distance along a prefix.
             if isempty(obstacles)
                 clearance = inf;
                 return;

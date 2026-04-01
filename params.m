@@ -1,5 +1,9 @@
 function config = params()
 %PARAMS Return default simulation configuration values.
+% Output:
+%   config - Struct containing the default headless/visual simulation
+%            options, conflict wait timeout, and optional dynamic
+%            obstacle schedule used by tests or demo runs.
 
 config = struct();
 config.dt = 0.1;

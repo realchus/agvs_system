@@ -105,6 +105,7 @@ classdef PathLibrary
 
     methods (Static, Access = private)
         function candidate = buildCandidatePath(route, speed, agvId, avoidNodes, pathId)
+            %BUILDCANDIDATEPATH Package one concrete route with metadata.
             manager = timewindow.TimeWindowManager();
             [timeWindows, conflictInfo] = manager.reservePath(agvId, route, 0.0, speed);
             if ~isempty(conflictInfo)
@@ -121,6 +122,7 @@ classdef PathLibrary
         end
 
         function route = buildTaskRoute(mapObj, taskObj, avoidNodes, agvId)
+            %BUILDTASKROUTE Plan the full multi-waypoint route for a task.
             anchors = [taskObj.start; taskObj.getWaypointPositions()];
             route = zeros(0, 2);
 
@@ -144,6 +146,7 @@ classdef PathLibrary
         end
 
         function segmentPath = planSegment(mapObj, startNode, goalNode, taskId, avoidNodes, agvId)
+            %PLANSEGMENT Plan one task segment on a cloned working map.
             workingMap = pathplan.PathLibrary.cloneMap(mapObj);
             pathplan.PathLibrary.applyAvoidNodes(workingMap, avoidNodes, startNode, goalNode);
             workingMap.registerTaskTarget(taskId, pathplan.PathLibrary.uniqueRows([startNode; goalNode]));
@@ -151,6 +154,7 @@ classdef PathLibrary
         end
 
         function workingMap = cloneMap(mapObj)
+            %CLONEMAP Copy map geometry, occupancy, and task-target metadata.
             config = mapObj.toStruct();
             workingMap = map.MapClass(config.baseGrid, config.colors);
 
@@ -165,6 +169,7 @@ classdef PathLibrary
         end
 
         function applyAvoidNodes(mapObj, avoidNodes, startNode, goalNode)
+            %APPLYAVOIDNODES Temporarily block selected nodes for diversification.
             for i = 1:size(avoidNodes, 1)
                 node = avoidNodes(i, :);
                 if isequal(node, startNode) || isequal(node, goalNode)
@@ -185,6 +190,7 @@ classdef PathLibrary
         end
 
         function lengthValue = computePathLength(route)
+            %COMPUTEPATHLENGTH Compute Euclidean route length for reporting.
             if size(route, 1) < 2
                 lengthValue = 0.0;
                 return;
@@ -195,6 +201,7 @@ classdef PathLibrary
         end
 
         function nodes = selectDiversionNodes(route, anchorNodes)
+            %SELECTDIVERSIONNODES Choose interior nodes to spawn route variants.
             if size(route, 1) <= 2
                 nodes = zeros(0, 2);
                 return;
@@ -221,6 +228,7 @@ classdef PathLibrary
         end
 
         function matrix = uniqueRows(matrix)
+            %UNIQUEROWS Remove duplicate rows while preserving order.
             if isempty(matrix)
                 return;
             end
@@ -230,6 +238,7 @@ classdef PathLibrary
         end
 
         function signature = nodeMatrixSignature(matrix)
+            %NODEMATRIXSIGNATURE Convert a node matrix into a dedupe key.
             if isempty(matrix)
                 signature = '[]';
             else
@@ -238,6 +247,7 @@ classdef PathLibrary
         end
 
         function candidate = emptyCandidatePath()
+            %EMPTYCANDIDATEPATH Return a default candidate-path struct.
             candidate = struct( ...
                 'pathId', 0, ...
                 'nodes', zeros(0, 2), ...

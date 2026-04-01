@@ -31,6 +31,7 @@ tasks = buildTaskArray(rawTasks);
 end
 
 function rawTasks = loadFromMat(sourcePath)
+%LOADFROMMAT Read task payloads from a MAT file.
 data = load(sourcePath);
 candidateFields = {'taskListData', 'taskList', 'tasks'};
 for i = 1:numel(candidateFields)
@@ -45,11 +46,13 @@ error('TaskParser:MissingTaskVariable', ...
 end
 
 function rawTasks = loadFromJson(sourcePath)
+%LOADFROMJSON Read task payloads from a JSON file.
 rawText = fileread(sourcePath);
 rawTasks = jsondecode(rawText);
 end
 
 function tasks = buildTaskArray(rawTasks)
+%BUILDTASKARRAY Convert parsed structs into TaskClass objects.
 if isempty(rawTasks)
     tasks = repmat(task.TaskClass(1, [1, 1], [], 1, 0, 'pending'), 0, 1);
     return;
@@ -73,6 +76,7 @@ end
 end
 
 function value = readField(taskData, names, defaultValue)
+%READFIELD Read the first available field alias from task data.
 if nargin < 3
     defaultValue = [];
 end

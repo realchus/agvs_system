@@ -317,11 +317,13 @@ classdef SchedulerClass < handle
 
     methods (Access = private)
         function pendingTasks = getPendingTasks(obj)
+            %GETPENDINGTASKS Return all tasks that are still waiting for dispatch.
             pendingMask = arrayfun(@(t) strcmp(t.status, 'pending'), obj.taskList);
             pendingTasks = obj.taskList(pendingMask);
         end
 
         function [candidatePaths, sourceLabel] = getCandidatePaths(obj, taskObj, agvObj)
+            %GETCANDIDATEPATHS Prefer library routes and fall back to on-demand A*.
             candidatePaths = scheduler.SchedulerClass.emptyCandidatePathArray();
             sourceLabel = 'library';
             if isempty(taskObj)
@@ -342,6 +344,7 @@ classdef SchedulerClass < handle
         end
 
         function libraryEntry = findLibraryEntry(obj, taskId)
+            %FINDLIBRARYENTRY Look up a path-library record by task id.
             libraryEntry = [];
             if isempty(obj.pathLibraryData)
                 return;
@@ -356,6 +359,7 @@ classdef SchedulerClass < handle
         end
 
         function [hasConflict, conflictInfo] = findConflictBetweenAGVs(obj, agvA, agvB)
+            %FINDCONFLICTBETWEENAGVS Search for the first reservation conflict.
             hasConflict = false;
             conflictInfo = scheduler.SchedulerClass.emptyConflictInfo();
 
@@ -377,6 +381,7 @@ classdef SchedulerClass < handle
         end
 
         function [keeperAgv, adjustedAgv] = selectConflictPriority(obj, agvA, agvB)
+            %SELECTCONFLICTPRIORITY Choose which AGV keeps its current plan.
             comparison = obj.compareAgvPriority(agvA, agvB);
             if comparison >= 0
                 keeperAgv = agvA;
@@ -388,6 +393,7 @@ classdef SchedulerClass < handle
         end
 
         function comparison = compareAgvPriority(obj, agvA, agvB)
+            %COMPAREAGVPRIORITY Compare AGVs using task priority and FIFO order.
             [priorityA, requestTimeA] = obj.getAgvPriorityInfo(agvA);
             [priorityB, requestTimeB] = obj.getAgvPriorityInfo(agvB);
 
@@ -405,6 +411,7 @@ classdef SchedulerClass < handle
         end
 
         function [priorityValue, requestTimeValue] = getAgvPriorityInfo(~, agvObj)
+            %GETAGVPRIORITYINFO Extract comparison fields from an AGV payload.
             if ~isa(agvObj.currentTask, 'task.TaskClass') || isempty(agvObj.currentTask)
                 priorityValue = 0.0;
                 requestTimeValue = inf;
@@ -416,6 +423,7 @@ classdef SchedulerClass < handle
         end
 
         function taskObj = getPrimaryTaskFromAGV(~, agvObj)
+            %GETPRIMARYTASKFROMAGV Return the lead task bound to an AGV.
             if isa(agvObj.currentTask, 'task.TaskClass') && ~isempty(agvObj.currentTask)
                 taskObj = agvObj.currentTask(1);
             else
@@ -424,6 +432,7 @@ classdef SchedulerClass < handle
         end
 
         function window = getWindowForAgv(~, conflictInfo, agvId)
+            %GETWINDOWFORAGV Extract the conflict window that belongs to one AGV.
             if conflictInfo.newWindow.agvId == agvId
                 window = conflictInfo.newWindow;
             elseif ~isempty(conflictInfo.existingWindow) && conflictInfo.existingWindow.agvId == agvId
@@ -437,6 +446,7 @@ classdef SchedulerClass < handle
 
         function [success, replannedPath, replannedWindows, sourceLabel] = ...
                 tryReplanStrategy(obj, agvObj, taskObj, currentTime, conflictInfo)
+            %TRYREPLANSTRATEGY Attempt alternate library routes, then conflict-aware A*.
             success = false;
             replannedPath = zeros(0, 2);
             replannedWindows = timewindow.TimeWindowManager.emptyWindowArray();
@@ -489,6 +499,7 @@ classdef SchedulerClass < handle
         end
 
         function route = buildConflictAwareRoute(obj, agvObj, taskObj, conflictInfo)
+            %BUILDCONFLICTAWAREROUTE Replan a route while blocking conflicting nodes.
             route = zeros(0, 2);
             currentNode = round(double(agvObj.position(:))');
             waypointPositions = taskObj.getWaypointPositions();
@@ -521,6 +532,7 @@ classdef SchedulerClass < handle
         end
 
         function executablePath = buildExecutablePath(obj, agvObj, taskObj, taskRoute)
+            %BUILDEXECUTABLEPATH Prepend a reposition leg when an AGV is off-route.
             executablePath = zeros(0, 2);
             if isempty(taskRoute)
                 return;
