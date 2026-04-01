@@ -1,0 +1,168 @@
+[
+  {
+    "id": 1,
+    "title": "地图建模",
+    "description": "实现栅格地图的创建和管理。包括：定义栅格值、颜色映射、可通行性判断（考虑AGV占用和货架临时开放）、地图可视化。",
+    "steps": [
+      "基于MAP.m提供的地图编写 MapClass.m，包含属性 grid, colors",
+      "实现 isPassable(row, col, agvId, taskId) 方法，动态判断",
+      "实现 setAGVOccupancy 和 clearAGVOccupancy 方法",
+      "实现 getColor 方法",
+      "创建测试脚本 test_map.m，验证地图初始化和可通行性逻辑",
+      "将地图数据保存到 data/map_config.mat"
+    ],
+    "passes": true
+  },
+  {
+    "id": 2,
+    "title": "AGV建模",
+    "description": "定义AGV类，管理AGV的位置、状态、任务、路径、时间窗。实现移动、装卸货模拟。",
+    "steps": [
+      "编写 AGVClass.m，包含 id, position, state, currentTask, speed, path 等属性",
+      "实现 move(dt) 方法，更新位置并返回是否到达下一节点",
+      "实现 load(time) 和 unload(time) 方法，模拟5秒装卸",
+      "实现 updateState(newState) 方法",
+      "创建测试脚本 test_agv.m，测试移动和装卸货逻辑",
+      "将AGV池初始数据保存到 data/agv_pool.mat"
+    ],
+    "passes": false
+  },
+  {
+    "id": 3,
+    "title": "任务建模",
+    "description": "定义任务类，包含任务ID、起点、终点序列、优先级、请求时间、状态。支持从JSON或MAT文件读取任务列表。",
+    "steps": [
+      "编写 TaskClass.m，包含 id, start, waypoints, priority, requestTime, status 等属性",
+      "编写 TaskParser.m 辅助函数，从 data/task_list.mat 加载任务",
+      "实现任务状态更新方法",
+      "创建测试脚本 test_task.m，加载示例任务并验证字段正确性",
+      "将提供的5个任务转换为 data/task_list.mat"
+    ],
+    "passes": false
+  },
+  {
+    "id": 4,
+    "title": "A*路径规划（含改进代价函数）",
+    "description": "实现A*算法，使用曼哈顿距离启发式，并实现改进的代价函数 f(n)=g(n)+(1+r/R)*h(n)。路径必须沿栅格中心线（4邻域）。",
+    "steps": [
+      "编写 AStar.m 函数，输入地图、起点、终点、AGV ID、任务ID，输出路径节点序列",
+      "实现曼哈顿距离计算",
+      "实现改进的启发式系数 (1+r/R)，其中 r 为起点到目标点距离，R 为当前点到目标点距离",
+      "确保路径不穿过不可通行区域（考虑AGV占用和货架临时开放）",
+      "创建测试脚本 test_astar.m，在不同场景下测试路径生成",
+      "集成到路径规划模块"
+    ],
+    "passes": false
+  },
+  {
+    "id": 5,
+    "title": "时间窗管理与冲突检测",
+    "description": "实现时间窗数据结构，支持添加、检测冲突（时间重叠、方向冲突）。冲突检测规则包括：同一路段同一时间不允许两车同向/反向通过。",
+    "steps": [
+      "编写 TimeWindowManager.m 类",
+      "定义时间窗结构：edgeIndex, startTime, endTime, agvId, direction",
+      "实现 addTimeWindow 方法",
+      "实现 detectConflict 方法，检测新时间窗与现有时间窗是否冲突",
+      "实现 reservePath 方法，为整个路径预留时间窗（基于速度计算占用时间）",
+      "实现 releasePath 方法，释放已完成路径的时间窗",
+      "编写测试脚本 test_timewindow.m，模拟多车冲突场景"
+    ],
+    "passes": false
+  },
+  {
+    "id": 6,
+    "title": "半离线路径库生成",
+    "description": "为每个任务生成多条备选路径，存储到路径库。利用A*生成主路径，然后通过绕行障碍物生成变种路径。",
+    "steps": [
+      "编写 PathLibrary.m 函数/类",
+      "实现 generateLibrary(map, task, numPaths) 方法，为任务生成 numPaths 条路径",
+      "存储路径和对应的时间窗（基于固定速度计算）",
+      "将路径库保存到 data/path_library.mat",
+      "测试生成任务的路径库"
+    ],
+    "passes": false
+  },
+  {
+    "id": 7,
+    "title": "任务调度器（含优先级、插队、顺路合并）",
+    "description": "实现调度器，按加权优先级+FIFO排序任务，支持紧急插队，支持为AGV分配任务时检查顺路任务并合并。",
+    "steps": [
+      "编写 SchedulerClass.m 类",
+      "实现 updatePriority 方法，根据等待时间更新优先级（等待时间加权）",
+      "实现 getNextTask 方法，返回优先级最高的任务",
+      "实现 assignToAGV 方法，分配任务并触发路径规划（先查路径库，否则A*）",
+      "实现 mergePickup 方法，检查AGV当前路径上是否有可顺路执行的任务，若有则合并",
+      "实现 emergencyInsert 方法，将紧急任务插队到最前",
+      "编写测试脚本 test_scheduler.m，模拟任务分配和插队"
+    ],
+    "passes": false
+  },
+  {
+    "id": 8,
+    "title": "冲突解决与重规划",
+    "description": "集成时间窗检测，当检测到冲突时，根据任务优先级决定等待或重规划。重规划时重新调用A*或从路径库选取其他路径。",
+    "steps": [
+      "在 SchedulerClass 中添加 handleConflict 方法",
+      "冲突解决策略：高优先级AGV保持原路径，低优先级AGV等待（延迟启动）或重新规划",
+      "若等待超时或无法等待，触发重规划",
+      "重规划时，优先使用路径库中的其他路径，若无则调用A*生成新路径",
+      "更新全局时间窗",
+      "集成测试：设计两车交叉冲突场景，验证解决效果"
+    ],
+    "passes": false
+  },
+  {
+    "id": 9,
+    "title": "DWA局部避障算法集成",
+    "description": "实现DWA算法，当AGV运行中遇到动态障碍物（如临时故障或行人）时，触发局部避障。避障后更新时间窗为∞，并触发重规划。",
+    "steps": [
+      "编写 DWAClass.m，实现动态窗口法速度采样和评价",
+      "集成到 AGV.move 方法中：检测前方是否有障碍物，若有则调用DWA生成局部路径",
+      "局部路径绕过障碍物后，将受影响的全局路径段的时间窗标记为 ∞（不可用）",
+      "触发冲突检测与重规划，重新规划剩余路径",
+      "创建测试脚本 test_dwa.m，模拟障碍物出现并验证避障"
+    ],
+    "passes": false
+  },
+  {
+    "id": 10,
+    "title": "仿真主循环与可视化",
+    "description": "实现仿真主循环，按时间步进更新所有AGV位置，处理事件（任务完成、冲突、避障），并提供实时可视化（地图、AGV位置、路径）。",
+    "steps": [
+      "编写 Simulation.m 类，包含 run() 方法",
+      "实现时间步进，更新AGV位置，处理装卸货计时",
+      "集成调度器，在AGV空闲时分配任务",
+      "集成冲突检测与解决模块",
+      "编写 Visualizer.m，使用 MATLAB 的 figure 和 patch 等绘制栅格地图、AGV位置（带编号）、路径轨迹",
+      "设置实时刷新（drawnow）",
+      "编写 main.m 入口，读取参数和初始数据，启动仿真"
+    ],
+    "passes": false
+  },
+  {
+    "id": 11,
+    "title": "完整任务场景测试",
+    "description": "使用提供的5个任务和3台AGV进行完整仿真测试，验证调度、路径规划、冲突解决、避障功能。记录关键指标（总时间、碰撞次数、重规划次数等）。",
+    "steps": [
+      "编写 test_scenario.m 脚本，加载初始地图、AGV池和任务列表",
+      "运行仿真，观察可视化结果",
+      "检查是否有碰撞发生，记录所有事件",
+      "输出最终报告：各AGV行驶距离、任务完成时间、冲突解决次数、避障次数",
+      "验证任务调度逻辑（优先级、顺路合并、紧急插队）"
+    ],
+    "passes": false
+  },
+  {
+    "id": 12,
+    "title": "文档完善与性能优化",
+    "description": "完善代码注释、用户文档（README.md），优化算法效率（如A*启发式、时间窗检测算法），准备最终交付。",
+    "steps": [
+      "为所有类和方法添加详细注释",
+      "编写 README.md，介绍项目背景、使用方法、运行示例",
+      "优化A*的邻域搜索，使用优先队列",
+      "优化时间窗冲突检测，使用区间树或排序列表",
+      "进行多次仿真，记录运行时间，确保满足实时性要求"
+    ],
+    "passes": false
+  }
+]

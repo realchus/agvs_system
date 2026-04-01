@@ -1,0 +1,31 @@
+# 开发进度日志
+
+## [2025-03-14] - Initialization
+
+### What was done:
+- 创建项目架构文档：`architecture.md`、`AGENTS.md`、`progress.txt`、`task.json`
+- 定义项目目录结构
+- 列出全部 12 个开发任务
+
+### Testing:
+- 暂无代码测试，仅完成初始化文档整理
+
+### Notes:
+- 下一步可开始实现任务 1：地图建模
+- 所有任务的 `passes` 初始值均为 `false`
+
+## [2026-04-01] - Task: 地图建模
+
+### What was done:
+- 新增 `+map/MapClass.m`，实现默认仓库地图构建、颜色映射、AGV 占用管理、任务目标货架临时开放判断和可视化接口
+- 新增 `tests/test_map.m`，覆盖地图初始化、通行性判断、AGV 占用更新和序列化输出验证
+- 新增 `data/createMapConfig.m` 并生成 `data/map_config.mat`
+- 更新 `MAP.m`，改为直接调用 `MapClass` 展示默认地图
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createMapConfig"`，成功生成 `data/map_config.mat`
+
+### Notes:
+- 当前货架临时开放逻辑通过 `registerTaskTarget(taskId, positions)` 注入目标位置，便于后续任务模块集成
+- 地图静态布局保存在 `baseGrid`，动态 AGV 占用叠加在 `grid`，后续路径规划可直接复用 `isPassable`
