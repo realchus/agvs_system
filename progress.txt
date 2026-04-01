@@ -63,3 +63,18 @@
 - 本次将 5 个任务的 `priority` 统一初始化为 `1`
 - 本次将 5 个任务的 `requestTime` 初始化为 `0, 10, 20, 30, 40` 秒，以保留明确的 FIFO 顺序
 - 任务初始 `status` 统一设为 `pending`
+
+## [2026-04-01] - Task: A*路径规划
+
+### What was done:
+- 新增 `+pathplan/AStar.m`，实现基于 4 邻域的 A* 路径规划
+- 启发函数使用曼哈顿距离，并按 `f(n)=g(n)+(1+r/R)*h(n)` 计算改进代价值
+- 规划过程直接复用 `MapClass.isPassable`，因此支持 AGV 占用避让和任务目标货架临时开放
+- 新增 `tests/test_astar.m`，覆盖直线路径、障碍绕行、占用避让和目标货架授权访问
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_astar"`，结果通过
+
+### Notes:
+- 当前开放列表采用线性扫描选最小 `f` 值，逻辑正确，后续如需性能优化可替换为优先队列
+- 返回路径为按顺序排列的栅格中心点坐标矩阵，便于后续直接交给 AGV 或时间窗模块使用
