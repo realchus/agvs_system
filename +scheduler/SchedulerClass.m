@@ -128,22 +128,27 @@ classdef SchedulerClass < handle
             end
 
             for i = 1:numel(candidatePaths)
+                executablePath = obj.buildExecutablePath(agvObj, taskObj, candidatePaths(i).nodes);
+                if isempty(executablePath)
+                    continue;
+                end
+
                 [reservedWindows, conflictInfo] = obj.timeWindowManager.reservePath( ...
-                    agvObj.id, candidatePaths(i).nodes, startTime, agvObj.speed);
+                    agvObj.id, executablePath, startTime, agvObj.speed);
                 if ~isempty(conflictInfo)
                     continue;
                 end
 
                 taskObj.updateStatus('assigned');
                 agvObj.assignTask(taskObj);
-                agvObj.assignPath(candidatePaths(i).nodes);
+                agvObj.assignPath(executablePath);
                 agvObj.setTimeWindows(reservedWindows);
                 agvObj.updateState('moving');
 
                 obj.timeWindowsGlobal = obj.timeWindowManager.timeWindows;
                 obj.updatePriority(startTime);
 
-                assignedPath = candidatePaths(i).nodes;
+                assignedPath = executablePath;
                 assignedWindows = reservedWindows;
                 success = true;
                 return;
@@ -513,6 +518,27 @@ classdef SchedulerClass < handle
                     route = [route; segmentPath(2:end, :)]; %#ok<AGROW>
                 end
             end
+        end
+
+        function executablePath = buildExecutablePath(obj, agvObj, taskObj, taskRoute)
+            executablePath = zeros(0, 2);
+            if isempty(taskRoute)
+                return;
+            end
+
+            currentNode = round(double(agvObj.position(:))');
+            routeStart = double(taskRoute(1, :));
+            if isequal(currentNode, routeStart)
+                executablePath = double(taskRoute);
+                return;
+            end
+
+            repositionPath = pathplan.AStar(obj.map, currentNode, routeStart, agvObj.id, taskObj.id);
+            if isempty(repositionPath)
+                return;
+            end
+
+            executablePath = [double(repositionPath); double(taskRoute(2:end, :))];
         end
     end
 

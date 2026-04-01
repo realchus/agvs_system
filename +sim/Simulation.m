@@ -15,6 +15,8 @@ classdef Simulation < handle
         currentTime
         eventLog
         serviceStates
+        agvTravelDistance
+        taskCompletionTimes
     end
 
     methods
@@ -62,6 +64,12 @@ classdef Simulation < handle
             obj.currentTime = 0.0;
             obj.eventLog = sim.Simulation.emptyEventLog();
             obj.serviceStates = containers.Map('KeyType', 'double', 'ValueType', 'any');
+            obj.agvTravelDistance = containers.Map('KeyType', 'double', 'ValueType', 'double');
+            obj.taskCompletionTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
+
+            for i = 1:numel(obj.agvPool)
+                obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
+            end
 
             obj.syncMapOccupancy();
             obj.initializeAssignedTasks();
@@ -80,7 +88,8 @@ classdef Simulation < handle
             results = struct( ...
                 'currentTime', obj.currentTime, ...
                 'completedTaskCount', sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList)), ...
-                'eventLog', obj.eventLog);
+                'eventLog', obj.eventLog, ...
+                'metrics', obj.buildMetrics());
         end
 
         function step(obj)
@@ -165,6 +174,8 @@ classdef Simulation < handle
         end
 
         function advanceAgv(obj, agvObj, dt, dynamicObstacles)
+            previousPosition = agvObj.position;
+
             if strcmp(agvObj.state, 'waiting')
                 if isempty(agvObj.timeWindows) || obj.currentTime >= agvObj.timeWindows(1).startTime - eps
                     agvObj.updateState('moving');
@@ -215,6 +226,8 @@ classdef Simulation < handle
             if reachedNode
                 obj.handleWaypointArrival(agvObj);
             end
+
+            obj.recordTravelDistance(agvObj.id, previousPosition, agvObj.position);
         end
 
         function handleWaypointArrival(obj, agvObj)
@@ -273,6 +286,7 @@ classdef Simulation < handle
             end
 
             taskObj.updateStatus('completed');
+            obj.taskCompletionTimes(taskObj.id) = obj.currentTime;
             obj.map.clearTaskTarget(taskObj.id);
             obj.timeWindowManager.releasePath(agvObj.id);
             agvObj.setTimeWindows(timewindow.TimeWindowManager.emptyWindowArray());
@@ -374,6 +388,53 @@ classdef Simulation < handle
                 'message', char(string(message)));
             obj.eventLog(end + 1, 1) = entry; %#ok<AGROW>
         end
+
+        function recordTravelDistance(obj, agvId, previousPosition, currentPosition)
+            if ~isKey(obj.agvTravelDistance, agvId)
+                obj.agvTravelDistance(agvId) = 0.0;
+            end
+
+            obj.agvTravelDistance(agvId) = obj.agvTravelDistance(agvId) + ...
+                norm(double(currentPosition) - double(previousPosition));
+        end
+
+        function metrics = buildMetrics(obj)
+            metrics = struct();
+            metrics.totalTime = obj.currentTime;
+            metrics.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+            metrics.collisionCount = sim.Simulation.countEvents(obj.eventLog, 'collision_detected');
+            metrics.conflictResolutionCount = sim.Simulation.countEvents(obj.eventLog, 'conflict_resolved');
+            metrics.replanCount = sim.Simulation.countEvents(obj.eventLog, 'path_replanned');
+            metrics.avoidanceCount = sim.Simulation.countEvents(obj.eventLog, 'dynamic_avoidance');
+            metrics.taskAssignmentFailureCount = sim.Simulation.countEvents(obj.eventLog, 'task_assignment_failed');
+            metrics.agvDistances = obj.exportAgvDistances();
+            metrics.taskCompletionTimes = obj.exportTaskCompletionTimes();
+        end
+
+        function agvDistances = exportAgvDistances(obj)
+            keysList = sort(cell2mat(obj.agvTravelDistance.keys));
+            agvDistances = repmat(struct('agvId', 0, 'distance', 0.0), numel(keysList), 1);
+            for i = 1:numel(keysList)
+                agvDistances(i, 1) = struct( ...
+                    'agvId', keysList(i), ...
+                    'distance', obj.agvTravelDistance(keysList(i)));
+            end
+        end
+
+        function completionTimes = exportTaskCompletionTimes(obj)
+            completionTimes = repmat(struct('taskId', 0, 'completionTime', 0.0), 0, 1);
+            if isempty(obj.taskCompletionTimes)
+                return;
+            end
+
+            keysList = sort(cell2mat(obj.taskCompletionTimes.keys));
+            completionTimes = repmat(struct('taskId', 0, 'completionTime', 0.0), numel(keysList), 1);
+            for i = 1:numel(keysList)
+                completionTimes(i, 1) = struct( ...
+                    'taskId', keysList(i), ...
+                    'completionTime', obj.taskCompletionTimes(keysList(i)));
+            end
+        end
     end
 
     methods (Static)
@@ -407,6 +468,16 @@ classdef Simulation < handle
                 'agvId', 0, ...
                 'taskId', 0, ...
                 'message', ''), 0, 1);
+        end
+
+        function count = countEvents(eventLog, type)
+            %COUNTEVENTS Count logged events of a given type.
+            if isempty(eventLog)
+                count = 0;
+                return;
+            end
+
+            count = sum(strcmp({eventLog.type}, char(string(type))));
         end
     end
 end

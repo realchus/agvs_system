@@ -88,8 +88,9 @@ classdef MapClass < handle
                 error('MapClass:OutOfBounds', 'AGV position (%d, %d) is out of bounds.', row, col);
             end
 
-            if ~obj.isPassable(row, col, agvId, taskId)
-                error('MapClass:NotPassable', 'Cell (%d, %d) is not passable for AGV %d.', row, col, agvId);
+            occupiedBy = obj.getOccupyingAgv(row, col);
+            if ~isempty(occupiedBy) && occupiedBy ~= agvId
+                error('MapClass:NotPassable', 'Cell (%d, %d) is already occupied by AGV %d.', row, col, occupiedBy);
             end
 
             if isKey(obj.agvOccupancy, agvId)

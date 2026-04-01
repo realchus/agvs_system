@@ -210,3 +210,23 @@
 
 - 当前仿真默认支持无界面运行，便于测试；开启 `enableVisualization` 后会实时绘制地图和 AGV 轨迹
 - 仿真主循环已经接入任务调度、时间窗冲突解决和 DWA 局部避障，足够支撑下一步完整场景测试
+
+## [2026-04-01] - Task: 完整任务场景测试
+
+### What was done:
+
+- 调整 `+scheduler/SchedulerClass.m` 的任务分配逻辑，为非起点位置接单的 AGV 自动补齐“当前位置到任务起点”的可执行路径
+- 调整 `+map/MapClass.m` 的 AGV 占用同步规则，允许仿真准确记录 AGV 停留在工作窗口等非车道目标点的位置
+- 扩展 `+sim/Simulation.m`，新增场景指标汇总：总耗时、碰撞次数、冲突解决次数、重规划次数、避障次数、每台 AGV 行驶距离和每个任务完成时间
+- 新增 `tests/test_scenario.m`，使用提供的 5 个任务和 3 台 AGV 运行完整仿真场景，并输出最终报告
+- 在完整场景中加入一个可重复命中的动态障碍事件，用于验证 DWA 局部避障在整场仿真中的触发和收敛
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario"`，结果全部通过
+
+### Notes:
+
+- 场景测试配置采用 `dt=1.0s`、`totalTime=260s`、默认 5 任务与 3 AGV，最终在 181 秒内完成全部任务
+- 本次场景报告结果为：碰撞次数 `0`、避障次数 `1`、任务完成时间分别为 `43, 56, 90, 144, 180` 秒
