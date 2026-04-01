@@ -78,3 +78,19 @@
 ### Notes:
 - 当前开放列表采用线性扫描选最小 `f` 值，逻辑正确，后续如需性能优化可替换为优先队列
 - 返回路径为按顺序排列的栅格中心点坐标矩阵，便于后续直接交给 AGV 或时间窗模块使用
+
+## [2026-04-01] - Task: 时间窗管理与冲突检测
+
+### What was done:
+- 新增 `+timewindow/TimeWindowManager.m`，实现时间窗结构管理
+- 实现 `addTimeWindow`、`detectConflict`、`reservePath` 和 `releasePath`
+- 统一用 `edgeIndex=[r1 c1 r2 c2]` 表示路径边段，并记录 `startTime`、`endTime`、`agvId`、`direction`
+- 冲突检测同时覆盖同向和反向占用同一路段的时间重叠情况
+- 新增 `tests/test_timewindow.m`，覆盖同向冲突、反向冲突、整条路径预留和路径释放
+
+### Testing:
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过
+
+### Notes:
+- 当前 `reservePath` 采用原子式预留，只要路径中任一边段冲突就不会写入任何新时间窗
+- 时间区间采用左闭右开式重叠判断，前一段结束时刻等于后一段开始时刻不视为冲突

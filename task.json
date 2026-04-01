@@ -67,7 +67,7 @@
       "实现 releasePath 方法，释放已完成路径的时间窗",
       "编写测试脚本 test_timewindow.m，模拟多车冲突场景"
     ],
-    "passes": false
+    "passes": true
   },
   {
     "id": 6,
