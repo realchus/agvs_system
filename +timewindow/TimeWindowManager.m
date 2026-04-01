@@ -5,12 +5,14 @@ classdef TimeWindowManager < handle
 
     properties
         timeWindows
+        invalidatedWindows
     end
 
     methods
         function obj = TimeWindowManager()
             %TIMEWINDOWMANAGER Construct an empty time window manager.
             obj.timeWindows = timewindow.TimeWindowManager.emptyWindowArray();
+            obj.invalidatedWindows = timewindow.TimeWindowManager.emptyWindowArray();
         end
 
         function window = addTimeWindow(obj, edgeIndex, startTime, endTime, agvId, direction)
@@ -38,7 +40,7 @@ classdef TimeWindowManager < handle
             %   hasConflict    - True if a conflict was found.
             %   conflictInfo   - Struct describing the first conflict found.
             if nargin < 3 || isempty(existingWindows)
-                existingWindows = obj.timeWindows;
+                existingWindows = [obj.timeWindows; obj.invalidatedWindows];
             end
 
             newWindow = timewindow.TimeWindowManager.normalizeWindow(newWindow);
@@ -52,7 +54,7 @@ classdef TimeWindowManager < handle
             for i = 1:numel(existingWindows)
                 existing = timewindow.TimeWindowManager.normalizeWindow(existingWindows(i));
 
-                if existing.agvId == newWindow.agvId
+                if existing.agvId > 0 && existing.agvId == newWindow.agvId
                     continue;
                 end
 
@@ -66,18 +68,31 @@ classdef TimeWindowManager < handle
                 end
 
                 hasConflict = true;
-                if existing.direction == newWindow.direction
+                if existing.agvId == 0
+                    conflictType = 'invalidated_edge';
+                    message = sprintf( ...
+                        'Blocked edge [%d %d %d %d] overlaps AGV %d reservation.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId);
+                elseif existing.direction == newWindow.direction
                     conflictType = 'same_direction_overlap';
+                    message = sprintf( ...
+                        'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId, existing.agvId);
                 else
                     conflictType = 'opposite_direction_overlap';
+                    message = sprintf( ...
+                        'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId, existing.agvId);
                 end
 
                 conflictInfo.type = conflictType;
-                conflictInfo.message = sprintf( ...
-                    'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
-                    newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
-                    newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
-                    newWindow.agvId, existing.agvId);
+                conflictInfo.message = message;
                 conflictInfo.existingWindow = existing;
                 return;
             end
@@ -120,7 +135,8 @@ classdef TimeWindowManager < handle
                 candidate = timewindow.TimeWindowManager.buildWindow( ...
                     edgeIndex, currentTime, endTime, agvId, direction);
 
-                [hasConflict, conflictInfo] = obj.detectConflict(candidate, [obj.timeWindows; candidateWindows]); %#ok<AGROW>
+                [hasConflict, conflictInfo] = obj.detectConflict(candidate, ...
+                    [obj.timeWindows; obj.invalidatedWindows; candidateWindows]); %#ok<AGROW>
                 if hasConflict
                     reservedWindows = timewindow.TimeWindowManager.emptyWindowArray();
                     return;
@@ -139,6 +155,54 @@ classdef TimeWindowManager < handle
             obj.timeWindows = [obj.timeWindows; candidateWindows];
             reservedWindows = candidateWindows;
             conflictInfo = [];
+        end
+
+        function invalidated = invalidatePath(obj, agvId, path, blockStartTime)
+            %INVALIDATEPATH Mark future reserved windows as unavailable.
+            % Inputs:
+            %   agvId          - AGV identifier owning the original path.
+            %   path           - Path whose remaining windows should be blocked.
+            %   blockStartTime - Start time from which the windows become invalid.
+            % Output:
+            %   invalidated    - Window array moved to the invalid list.
+            if nargin < 4 || isempty(blockStartTime)
+                blockStartTime = 0.0;
+            end
+
+            invalidated = timewindow.TimeWindowManager.emptyWindowArray();
+            if isempty(obj.timeWindows)
+                return;
+            end
+
+            releaseEdges = timewindow.TimeWindowManager.pathToEdgeIndexList(path);
+            keepMask = true(numel(obj.timeWindows), 1);
+
+            for i = 1:numel(obj.timeWindows)
+                existing = obj.timeWindows(i);
+                if existing.agvId ~= agvId || existing.endTime <= blockStartTime
+                    continue;
+                end
+
+                for j = 1:size(releaseEdges, 1)
+                    if ~timewindow.TimeWindowManager.isSameDirectedEdge(existing.edgeIndex, releaseEdges(j, :))
+                        continue;
+                    end
+
+                    keepMask(i) = false;
+                    invalidStart = max(existing.startTime, blockStartTime);
+                    if invalidStart < existing.endTime
+                        blockedWindow = timewindow.TimeWindowManager.buildWindow( ...
+                            existing.edgeIndex, invalidStart, existing.endTime, 0, existing.direction);
+                        invalidated(end + 1, 1) = blockedWindow; %#ok<AGROW>
+                    end
+                    break;
+                end
+            end
+
+            obj.timeWindows = obj.timeWindows(keepMask);
+            if ~isempty(invalidated)
+                obj.invalidatedWindows = [obj.invalidatedWindows; invalidated];
+            end
         end
 
         function releasePath(obj, agvId, path)
@@ -181,6 +245,11 @@ classdef TimeWindowManager < handle
             end
 
             obj.timeWindows = obj.timeWindows(keepMask);
+        end
+
+        function windows = getAllWindows(obj)
+            %GETALLWINDOWS Return both reserved and invalidated windows.
+            windows = [obj.timeWindows; obj.invalidatedWindows];
         end
     end
 
@@ -231,7 +300,7 @@ classdef TimeWindowManager < handle
             validateattributes(edgeIndex, {'numeric'}, {'vector', 'numel', 4, 'finite'});
             validateattributes(startTime, {'numeric'}, {'scalar', 'finite', 'nonnegative'});
             validateattributes(endTime, {'numeric'}, {'scalar', 'finite', '>', startTime});
-            validateattributes(agvId, {'numeric'}, {'scalar', 'integer', 'positive'});
+            validateattributes(agvId, {'numeric'}, {'scalar', 'integer', '>=', 0});
             validateattributes(direction, {'numeric'}, {'scalar', 'integer', '>=', 0, '<=', 3});
 
             window = struct( ...

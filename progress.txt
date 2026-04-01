@@ -168,3 +168,24 @@
 
 - 当前冲突解决逻辑面向“路径已分配、时间窗已预留”的调度阶段，便于后续在仿真主循环中直接调用
 - 重规划优先复用路径库，只有候选路径均不可用时才回退到 A*
+
+## [2026-04-01] - Task: DWA局部避障算法集成
+
+### What was done:
+
+- 新增 `+pathplan/DWAClass.m`，实现局部动态窗口采样、候选方向评分和与全局路径的重连
+- 扩展 `+agv/AGVClass.m`，在 `move(dt, context)` 中支持检测前方动态障碍物并触发 DWA 局部避障
+- 为 AGV 新增局部避障后的剩余路径替换、旧时间窗失效记录和冲突后二次重规划逻辑
+- 扩展 `+timewindow/TimeWindowManager.m`，新增 `invalidatedWindows` 和 `invalidatePath`，用于将受动态障碍影响的旧路径时间窗标记为不可用
+- 新增 `tests/test_dwa.m`，覆盖动态障碍触发局部避障，以及避障后发生时间窗冲突并重新规划剩余路径两类场景
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_dwa"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv; test_timewindow; test_scheduler; test_dwa"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa"`，结果全部通过
+
+### Notes:
+
+- 当前 DWA 实现采用“短视野采样 + A* 重连”的轻量方案，适合当前栅格路径与仿真框架
+- `AGV.move` 保持向后兼容；未传入 `context` 时仍按原有固定路径推进逻辑运行
