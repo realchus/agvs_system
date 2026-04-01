@@ -3,130 +3,168 @@
 ## [2025-03-14] - Initialization
 
 ### What was done:
-- 创建项目架构文档：`architecture.md`、`AGENTS.md`、`progress.txt`、`task.json`
+
+- 创建项目结构文档：`architecture.md`、`AGENTS.md`、`progress.txt`、`task.json`
 - 定义项目目录结构
 - 列出全部 12 个开发任务
 
 ### Testing:
-- 暂无代码测试，仅完成初始化文档整理
+
+- 暂无代码测试，仅完成初始化整理
 
 ### Notes:
+
 - 下一步可开始实现任务 1：地图建模
 - 所有任务的 `passes` 初始值均为 `false`
 
 ## [2026-04-01] - Task: 地图建模
 
 ### What was done:
-- 新增 `+map/MapClass.m`，实现默认仓库地图构建、颜色映射、AGV 占用管理、任务目标货架临时开放判断和可视化接口
-- 新增 `tests/test_map.m`，覆盖地图初始化、通行性判断、AGV 占用更新和序列化输出验证
-- 新增 `data/createMapConfig.m` 并生成 `data/map_config.mat`
-- 更新 `MAP.m`，改为直接调用 `MapClass` 展示默认地图
+
+- 新增 `+map/MapClass.m`，实现默认仓库地图、颜色映射、AGV 占用管理、任务目标点临时开放和地图可视化
+- 更新 `MAP.m`，改为直接调用 `MapClass`
+- 新增 `tests/test_map.m`，覆盖地图初始化、通行性、AGV 占用和序列化
+- 新增 `data/createMapConfig.m`，并生成 `data/map_config.mat`
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map"`，结果通过
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createMapConfig"`，成功生成 `data/map_config.mat`
 
 ### Notes:
-- 当前货架临时开放逻辑通过 `registerTaskTarget(taskId, positions)` 注入目标位置，便于后续任务模块集成
-- 地图静态布局保存在 `baseGrid`，动态 AGV 占用叠加在 `grid`，后续路径规划可直接复用 `isPassable`
+
+- 地图静态布局保存在 `baseGrid`，AGV 动态占用叠加在 `grid`
+- 任务目标点通过 `registerTaskTarget(taskId, positions)` 注入，供路径规划复用
 
 ## [2026-04-01] - Task: AGV建模
 
 ### What was done:
-- 新增 `+agv/AGVClass.m`，实现 AGV 基础属性、任务绑定、路径分配、按速度推进的 `move(dt)`、装卸计时、状态更新和序列化接口
-- 新增 `tests/test_agv.m`，覆盖路径移动、节点到达、装货、卸货、状态切换和默认 AGV 池验证
-- 新增 `data/createAgvPool.m` 并生成 `data/agv_pool.mat`
+
+- 新增 `+agv/AGVClass.m`，实现 AGV 属性、任务绑定、路径分配、连续移动、装卸计时、状态更新和序列化
+- 新增 `tests/test_agv.m`，覆盖路径移动、到达节点、装货、卸货和状态切换
+- 新增 `data/createAgvPool.m`，并生成 `data/agv_pool.mat`
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv"`，结果通过
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createAgvPool"`，成功生成 `data/agv_pool.mat`
 
 ### Notes:
-- `move(dt)` 采用连续位置推进，路径节点仍保持栅格中心点表示，便于后续接入路径规划结果
-- `load(elapsedTime)` 和 `unload(elapsedTime)` 支持按时间片累计推进，适合仿真主循环逐步调用
-- MATLAB 在 `createAgvPool` 结束后输出了一次 Java shutdown 日志，但文件已成功生成且命令成功返回
+
+- `move(dt)` 采用连续位置推进，路径节点保持栅格中心表示
+- `load` 和 `unload` 支持按时间片累积推进，便于后续仿真循环调用
 
 ## [2026-04-01] - Task: 任务建模
 
 ### What was done:
-- 首先检查仓库现状并确认缺少“提供的 5 个任务”原始输入，按规范记录阻塞
-- 在收到任务定义后，新增 `+task/TaskClass.m`，实现任务属性、航点归一化、状态更新、航点访问接口和序列化
-- 新增 `+task/TaskParser.m`，支持从 `JSON` 和 `MAT` 两种格式加载任务列表
-- 新增 `data/createTaskList.m`，将提供的 5 个任务写入 `data/task_list.json` 和 `data/task_list.mat`
-- 新增 `tests/test_task.m`，覆盖 JSON/MAT 解析、任务字段验证、状态更新和结构化输出
+
+- 在拿到 5 个任务定义后，新增 `+task/TaskClass.m`，实现任务属性、航点归一化、状态更新和序列化
+- 新增 `+task/TaskParser.m`，支持从 JSON 和 MAT 两种格式加载任务
+- 新增 `data/createTaskList.m`，生成 `data/task_list.json` 和 `data/task_list.mat`
+- 新增 `tests/test_task.m`，覆盖 JSON/MAT 解析、字段校验和状态更新
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createTaskList"`，成功生成 `data/task_list.json` 和 `data/task_list.mat`
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_task"`，结果通过
 
 ### Notes:
-- 本次将 5 个任务的 `priority` 统一初始化为 `1`
-- 本次将 5 个任务的 `requestTime` 初始化为 `0, 10, 20, 30, 40` 秒，以保留明确的 FIFO 顺序
-- 任务初始 `status` 统一设为 `pending`
+
+- 5 个任务的 `priority` 初始化为 `1`
+- 5 个任务的 `requestTime` 初始化为 `0, 10, 20, 30, 40`
+- 初始 `status` 统一设置为 `pending`
 
 ## [2026-04-01] - Task: A*路径规划
 
 ### What was done:
-- 新增 `+pathplan/AStar.m`，实现基于 4 邻域的 A* 路径规划
-- 启发函数使用曼哈顿距离，并按 `f(n)=g(n)+(1+r/R)*h(n)` 计算改进代价值
-- 规划过程直接复用 `MapClass.isPassable`，因此支持 AGV 占用避让和任务目标货架临时开放
-- 新增 `tests/test_astar.m`，覆盖直线路径、障碍绕行、占用避让和目标货架授权访问
+
+- 新增 `+pathplan/AStar.m`，实现 4 邻域 A* 路径规划
+- 使用曼哈顿距离作为启发，并按 `f(n)=g(n)+(1+r/R)*h(n)` 计算改进代价
+- 路径规划直接复用 `MapClass.isPassable`，自动考虑 AGV 占用和任务目标点开放
+- 新增 `tests/test_astar.m`，覆盖直线路径、障碍绕行、占用避让和目标点授权访问
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_astar"`，结果通过
 
 ### Notes:
-- 当前开放列表采用线性扫描选最小 `f` 值，逻辑正确，后续如需性能优化可替换为优先队列
-- 返回路径为按顺序排列的栅格中心点坐标矩阵，便于后续直接交给 AGV 或时间窗模块使用
+
+- 当前开放集使用线性扫描选取最小 `f` 值，后续如需性能优化可替换为优先队列
 
 ## [2026-04-01] - Task: 时间窗管理与冲突检测
 
 ### What was done:
+
 - 新增 `+timewindow/TimeWindowManager.m`，实现时间窗结构管理
 - 实现 `addTimeWindow`、`detectConflict`、`reservePath` 和 `releasePath`
-- 统一用 `edgeIndex=[r1 c1 r2 c2]` 表示路径边段，并记录 `startTime`、`endTime`、`agvId`、`direction`
-- 冲突检测同时覆盖同向和反向占用同一路段的时间重叠情况
-- 新增 `tests/test_timewindow.m`，覆盖同向冲突、反向冲突、整条路径预留和路径释放
+- 统一用 `edgeIndex=[r1 c1 r2 c2]` 表示路径边段，并记录开始结束时间、AGV 和方向
+- 新增 `tests/test_timewindow.m`，覆盖同向冲突、反向冲突、整条路径预留和释放
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过
 
 ### Notes:
-- 当前 `reservePath` 采用原子式预留，只要路径中任一边段冲突就不会写入任何新时间窗
-- 时间区间采用左闭右开式重叠判断，前一段结束时刻等于后一段开始时刻不视为冲突
+
+- `reservePath` 采用原子式预留，只要路径中任一边段冲突就不会写入新时间窗
+- 时间区间按左闭右开处理，首尾相接不视为冲突
 
 ## [2026-04-01] - Task: 半离线路径库生成
 
 ### What was done:
-- 新增 `+pathplan/PathLibrary.m`，实现单任务多候选路径生成、批量任务路径库生成和保存接口
-- 复用 `AStar` 与 `TimeWindowManager`，为每条候选路径附加基于固定速度的时间窗序列
-- 通过屏蔽已发现路径的内部节点来生成变体路径，以得到多条备选路线
-- 新增 `data/createPathLibrary.m` 并生成 `data/path_library.mat`
-- 新增 `tests/test_pathlibrary.m`，覆盖简单地图上的多路径生成、批量任务生成和库文件落盘
-- 调整 `MapClass.isPassable`，允许被当前任务注册为目标点的工作窗口位置通过，并补充对应测试
+
+- 新增 `+pathplan/PathLibrary.m`，实现单任务多候选路径生成和批量路径库生成
+- 为每条候选路径附加基于固定速度推导出的时间窗序列
+- 通过屏蔽已发现路径的内部节点，生成变体路径
+- 新增 `data/createPathLibrary.m`，并生成 `data/path_library.mat`
+- 新增 `tests/test_pathlibrary.m`，覆盖多路径生成、批量生成和数据落盘
+- 调整 `+map/MapClass.m`，允许当前任务注册的工作窗口位置通行，并补充对应测试
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_pathlibrary"`，结果通过
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createPathLibrary"`，成功生成 `data/path_library.mat`
 
 ### Notes:
-- 当前路径库按任务保存候选路径，默认请求每个任务最多 3 条候选路线
-- 若在当前地图约束下无法生成足够多的不同路线，生成结果会保留已有的可行路径并记录实际数量
+
+- 当前默认每个任务最多生成 3 条候选路径
+- 若地图约束下无法生成足够多不同路线，会保留已有可行路径并记录实际数量
 
 ## [2026-04-01] - Task: 任务调度器
 
 ### What was done:
+
 - 新增 `+scheduler/SchedulerClass.m`，实现调度器核心结构
-- 实现 `updatePriority`，按基础优先级加等待时间加权，并用 `requestTime` 保持 FIFO 排序
-- 实现 `getNextTask`，返回当前优先级最高的待执行任务
-- 实现 `assignToAGV`，先查询路径库，再为候选路径尝试全局时间窗预留，成功后绑定 AGV、任务与路径
-- 实现 `mergePickup`，识别 AGV 当前路径上可顺路完成的待执行任务并合并
-- 实现 `emergencyInsert`，通过高优先级偏移将紧急任务插入队列前部
+- 实现 `updatePriority`、`getNextTask`、`assignToAGV`、`mergePickup` 和 `emergencyInsert`
+- 调度逻辑支持“基础优先级 + 等待时间加权 + FIFO”排序
+- 分配任务时优先使用路径库，并在成功后更新全局时间窗
 - 新增 `tests/test_scheduler.m`，覆盖任务排序、路径库优先分配、顺路合并和紧急插队
 
 ### Testing:
+
 - 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过
 
 ### Notes:
+
 - 当前 `assignToAGV` 在存在路径库时会优先尝试库中的候选路径；若路径库缺失，则回退到基于 `AStar` 的单路径生成
-- 当前 `mergePickup` 采用“任务起点与航点都位于 AGV 现有路径上且顺序一致”作为合并条件，便于后续继续细化合并策略
+- 当前 `mergePickup` 使用“任务起点与航点都位于 AGV 现有路径上且顺序一致”作为合并条件
+
+## [2026-04-01] - Task: 冲突解决与重规划
+
+### What was done:
+
+- 扩展 `+scheduler/SchedulerClass.m`，新增 `handleConflict`，支持检测两车已预留路径的时间窗冲突
+- 按任务优先级、请求时间和 AGV ID 决定保留原路径的高优先级车辆与需要调整的低优先级车辆
+- 为低优先级 AGV 实现延迟启动策略：释放原时间窗后重新预留同一路径，成功时更新为 `waiting` 状态
+- 为等待失败或超时场景实现重规划：优先尝试路径库中的其他候选路径，若无可用路线则回退到冲突感知 A* 重规划
+- 扩展 `tests/test_scheduler.m`，新增两车冲突的等待消解和备用路径重规划集成场景
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler"`，结果全部通过
+
+### Notes:
+
+- 当前冲突解决逻辑面向“路径已分配、时间窗已预留”的调度阶段，便于后续在仿真主循环中直接调用
+- 重规划优先复用路径库，只有候选路径均不可用时才回退到 A*
