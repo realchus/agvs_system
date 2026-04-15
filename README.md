@@ -14,6 +14,7 @@
 - 地图模型：支持静态栅格、AGV 占用、任务目标点临时开放。
 - AGV 模型：支持移动、装货、卸货、状态切换和局部避障。
 - 任务模型：支持从 `MAT` / `JSON` 文件加载任务定义。
+- AGV 池模型：支持从 `MAT` / `JSON` 文件加载 AGV 池定义。
 - 全局规划：使用 4 邻域 A*，采用改进代价函数 `f(n)=g(n)+(1+r/R)*h(n)`。
 - 时间窗管理：支持路径预约、同向冲突、对向冲突、失效路径标记。
 - 调度器：支持优先级 + FIFO 排序、插队、顺路合并、冲突后等待或重规划。
@@ -40,16 +41,32 @@
 
 ## 运行方式
 
-在 MATLAB 当前工作目录切换到项目根目录 `C:\Aneed` 后执行：
+在 MATLAB 当前工作目录切换到项目根目录后执行：
 
 ```matlab
 main
 ```
 
-如果希望直接创建默认仿真实例并运行：
+如果希望直接创建默认仿真实例并运行（默认读取项目根目录下 `data/agv_pool.json` 与 `data/task_list.json`，与当前工作目录无关）：
 
 ```matlab
 config = params();
+simulation = sim.Simulation.fromDefaults(config);
+results = simulation.run();
+```
+
+
+如果想快速修改默认 AGV 池或任务列表，只需编辑下面两个 JSON 文件后重新运行：
+
+- `data/agv_pool.json`
+- `data/task_list.json`
+
+也可以在配置中指定自定义入口文件：
+
+```matlab
+config = params();
+config.agvPoolFile = fullfile(pwd, 'data', 'my_agv_pool.json');
+config.taskListFile = fullfile(pwd, 'data', 'my_task_list.json');
 simulation = sim.Simulation.fromDefaults(config);
 results = simulation.run();
 ```

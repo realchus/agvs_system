@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "position": [1, 25],
+    "speed": 1,
+    "state": "idle"
+  },
+  {
+    "id": 2,
+    "position": [1, 32],
+    "speed": 1,
+    "state": "idle"
+  },
+  {
+    "id": 3,
+    "position": [1, 38],
+    "speed": 1,
+    "state": "idle"
+  }
+]

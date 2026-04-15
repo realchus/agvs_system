@@ -462,11 +462,22 @@ classdef Simulation < handle
                 config = params();
             end
 
+            agvPoolFile = sim.Simulation.configValue(config, 'agvPoolFile', sim.Simulation.defaultDataPath('agv_pool.mat'));
+            taskListFile = sim.Simulation.configValue(config, 'taskListFile', sim.Simulation.defaultDataPath('task_list.mat'));
+
             obj = sim.Simulation( ...
                 map.MapClass.createDefaultMap(), ...
-                agv.AGVClass.createDefaultPool(), ...
-                task.TaskParser(fullfile(pwd, 'data', 'task_list.mat')), ...
+                agv.AGVPoolParser(agvPoolFile), ...
+                task.TaskParser(taskListFile), ...
                 config);
+        end
+
+
+        function dataPath = defaultDataPath(fileName)
+            %DEFAULTDATAPATH Build a project-root data path for defaults.
+            classDir = fileparts(mfilename('fullpath'));
+            projectRoot = fileparts(fileparts(classDir));
+            dataPath = fullfile(projectRoot, 'data', char(string(fileName)));
         end
 
         function value = configValue(config, fieldName, defaultValue)

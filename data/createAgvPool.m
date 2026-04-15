@@ -13,5 +13,14 @@ agvPool = agv.AGVClass.createDefaultPool();
 agvPoolData = agv.AGVClass.poolToStructArray(agvPool);
 
 save(fullfile(outputDir, 'agv_pool.mat'), 'agvPoolData');
+jsonText = jsonencode(agvPoolData, PrettyPrint=true);
+fid = fopen(fullfile(outputDir, 'agv_pool.json'), 'w');
+if fid < 0
+    error('createAgvPool:OpenFailed', 'Failed to open agv_pool.json for writing.');
+end
+fprintf(fid, '%s', jsonText);
+fclose(fid);
+
 disp('Saved data/agv_pool.mat');
+disp('Saved data/agv_pool.json');
 end

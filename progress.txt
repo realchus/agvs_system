@@ -252,3 +252,40 @@
 
 - 性能测试中的平均 wall-clock 运行时间低于完整场景的仿真时长 `260s`，满足当前“实时性”目标
 - `tests/test_performance.m` 会重复执行完整场景，运行时间明显长于普通单元测试，后续可按 CI 需求拆分为冒烟与性能两类测试
+
+## [2026-04-15] - Task: JSON入口支持（AGV池与任务列表）
+
+### What was done:
+
+- 新增 `+agv/AGVPoolParser.m`，支持从 `.mat/.json` 读取 AGV 池数据并构建 `AGVClass` 对象。
+- 更新 `sim.Simulation.fromDefaults`：通过 `config.agvPoolFile` 与 `config.taskListFile` 作为统一数据入口加载默认仿真对象。
+- 更新 `params.m` 默认配置，默认指向 `data/agv_pool.json` 与 `data/task_list.json`。
+- 更新 `data/createAgvPool.m`，除 MAT 外同时导出 `data/agv_pool.json`。
+- 新增 `data/agv_pool.json` 默认样例文件，支持直接编辑 AGV 初始池。
+- 扩展 `tests/test_agv.m` 与 `tests/test_simulation.m`，覆盖 AGV JSON 解析和默认入口 JSON 加载流程。
+- 更新 `README.md`，补充 JSON 入口使用说明与自定义配置示例。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv"`（本环境未安装 MATLAB，未执行）。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`（本环境未安装 MATLAB，未执行）。
+
+### Notes:
+
+- 现在可直接通过编辑 JSON 文件快速调整 AGV 池与任务列表，无需改动代码。
+
+## [2026-04-15] - Task: JSON入口路径健壮性修复
+
+### What was done:
+
+- 修复 `params.m` 默认数据路径，改为基于项目根目录构建，不再依赖当前 MATLAB 工作目录。
+- 修复 `sim.Simulation.fromDefaults` 的默认回退路径，新增 `defaultDataPath(fileName)` 统一构建项目级 `data/` 路径。
+- 更新 `README.md` 的运行说明，明确默认 JSON 数据入口与工作目录解耦。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`（本环境未安装 MATLAB，未执行）。
+
+### Notes:
+
+- 现在即使从非项目根目录启动，也可正确定位默认 AGV/任务数据文件。

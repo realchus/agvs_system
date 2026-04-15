@@ -6,6 +6,7 @@ addpath(projectRoot);
 
 testSingleTaskLifecycle();
 testConflictResolutionInsideStep();
+test_simulation_from_defaults_json_sources();
 
 disp('test_simulation passed');
 end
@@ -83,4 +84,51 @@ assert(strcmp(agvLow.state, 'waiting') || strcmp(agvLow.state, 'moving'), ...
     'Lower-priority AGV should be delayed or otherwise adjusted by conflict resolution.');
 assert(any(strcmp({simulation.eventLog.type}, 'conflict_resolved')), ...
     'Simulation step should log scheduler conflict handling.');
+end
+
+
+function test_simulation_from_defaults_json_sources()
+projectRoot = fileparts(fileparts(mfilename('fullpath')));
+addpath(projectRoot);
+
+agvJsonPath = fullfile(tempdir, 'test_simulation_agv_pool.json');
+taskJsonPath = fullfile(tempdir, 'test_simulation_task_list.json');
+
+agvPayload = struct( ...
+    'id', {1, 2}, ...
+    'position', {[1, 2], [1, 3]}, ...
+    'speed', {1.0, 1.0}, ...
+    'state', {'idle', 'idle'});
+
+waypointCell = {{{[1, 2], [2, 2]}}, {{[1, 3], [2, 3]}}};
+taskPayload = struct( ...
+    'id', {101, 102}, ...
+    'start', {[1, 2], [1, 3]}, ...
+    'waypoints', waypointCell, ...
+    'priority', {1, 2}, ...
+    'requestTime', {0, 3}, ...
+    'status', {'pending', 'pending'});
+
+write_json_file(agvJsonPath, agvPayload);
+write_json_file(taskJsonPath, taskPayload);
+
+config = params();
+config.enableVisualization = false;
+config.agvPoolFile = agvJsonPath;
+config.taskListFile = taskJsonPath;
+
+simulation = sim.Simulation.fromDefaults(config);
+assert(numel(simulation.agvPool) == 2, 'fromDefaults should load AGV pool from JSON source.');
+assert(numel(simulation.taskList) == 2, 'fromDefaults should load task list from JSON source.');
+assert(simulation.taskList(2).id == 102, 'JSON task list ordering should be preserved.');
+
+delete(agvJsonPath);
+delete(taskJsonPath);
+end
+
+function write_json_file(path, payload)
+fid = fopen(path, 'w');
+assert(fid > 0, 'Failed to open temporary JSON file: %s', path);
+fprintf(fid, '%s', jsonencode(payload));
+fclose(fid);
 end

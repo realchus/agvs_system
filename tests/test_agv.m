@@ -54,5 +54,26 @@ defaultPool = agv.AGVClass.createDefaultPool();
 assert(numel(defaultPool) == 3, 'Default AGV pool should contain three vehicles.');
 assert(isequal(defaultPool(2).position, [1, 32]), 'Default AGV pool positions are incorrect.');
 
+
+jsonPath = fullfile(tempdir, 'test_agv_pool.json');
+jsonPayload = struct( ...
+    'id', {11, 12}, ...
+    'position', {[2, 3], [4, 5]}, ...
+    'speed', {1.2, 0.8}, ...
+    'state', {'idle', 'waiting'});
+fid = fopen(jsonPath, 'w');
+assert(fid > 0, 'Failed to open temporary AGV JSON file.');
+fprintf(fid, '%s', jsonencode(jsonPayload));
+fclose(fid);
+
+parsedPool = agv.AGVPoolParser(jsonPath);
+assert(numel(parsedPool) == 2, 'AGV JSON parser should load two vehicles.');
+assert(parsedPool(1).id == 11 && isequal(parsedPool(1).position, [2, 3]), ...
+    'AGV JSON parser failed to load first AGV fields.');
+assert(abs(parsedPool(2).speed - 0.8) < 1e-9 && strcmp(parsedPool(2).state, 'waiting'), ...
+    'AGV JSON parser failed to load state/speed aliases.');
+
+delete(jsonPath);
+
 disp('test_agv passed');
 end
