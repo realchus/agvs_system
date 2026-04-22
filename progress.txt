@@ -341,3 +341,24 @@
 
 - 如需运行 `main.m` 时显示可视化，在 `params.m` 中将 `config.mainEnableVisualization` 改为 `true`。
 - 如需关闭任务完成后的自动返航，在 `params.m` 中将 `config.returnToParkingWhenIdle` 改为 `false`。
+
+## [2026-04-22] - Task: 修复装货时间与无头模式参数
+
+### What was done:
+
+- 修复 `+sim/Simulation.m` 的服务点判定，将 `task.start` 纳入装卸服务序列，AGV 到达任务起点后会先进入装货状态并等待配置的 `loadDuration=5s`。
+- 处理 AGV 分配任务时已经位于任务起点的情况，先启动装货服务，不会直接跳过起点继续行驶。
+- 删除 `params.m` 中的 `config.mainEnableVisualization`，新增 `config.enableHeadlessMode`，并由该参数推导 `enableVisualization` 和 `visualizerVisible`。
+- 更新 `main.m`，按 `enableHeadlessMode` 控制主入口是否显示可视化。
+- 更新 `tests/test_simulation.m`，增加 `loading_started` 到 `loading_completed` 相差 5 秒的回归断言。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 默认 10 AGV / 30 任务场景完成时间 `3560s`，完成任务数 `30`，碰撞次数 `0`。
+
+### Notes:
+
+- `enableHeadlessMode=true` 表示无头运行；如需显示可视化，可在 `params.m` 中改为 `false`。
+- 完整场景中出现过 1 次临时任务分配失败日志，后续调度恢复并完成全部任务。

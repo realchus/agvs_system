@@ -3,9 +3,9 @@
 %   the scenario once, and prints the final completion summary.
 
 config = params();
-if isfield(config, 'mainEnableVisualization')
-    config.enableVisualization = config.mainEnableVisualization;
-    config.visualizerVisible = config.mainEnableVisualization;
+if isfield(config, 'enableHeadlessMode')
+    config.enableVisualization = ~config.enableHeadlessMode;
+    config.visualizerVisible = ~config.enableHeadlessMode;
 end
 
 simulation = sim.Simulation.fromDefaults(config);

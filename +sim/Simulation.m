@@ -293,6 +293,10 @@ classdef Simulation < handle
                 return;
             end
 
+            if obj.handleWaypointArrival(agvObj)
+                return;
+            end
+
             context = struct( ...
                 'map', obj.map, ...
                 'dynamicObstacles', dynamicObstacles, ...
@@ -319,8 +323,9 @@ classdef Simulation < handle
             obj.recordTravelDistance(agvObj.id, previousPosition, agvObj.position);
         end
 
-        function handleWaypointArrival(obj, agvObj)
+        function didStartService = handleWaypointArrival(obj, agvObj)
             %HANDLEWAYPOINTARRIVAL Trigger loading or unloading at target nodes.
+            didStartService = false;
             if ~isKey(obj.serviceStates, agvObj.id)
                 return;
             end
@@ -331,17 +336,17 @@ classdef Simulation < handle
                 return;
             end
 
-            waypointPositions = taskObj.getWaypointPositions();
-            if isempty(waypointPositions) || state.nextWaypointIndex > size(waypointPositions, 1)
+            servicePositions = obj.servicePositionsForTask(taskObj);
+            if isempty(servicePositions) || state.nextWaypointIndex > size(servicePositions, 1)
                 return;
             end
 
-            targetPosition = waypointPositions(state.nextWaypointIndex, :);
+            targetPosition = servicePositions(state.nextWaypointIndex, :);
             if norm(agvObj.position - targetPosition) > 1e-9
                 return;
             end
 
-            if state.nextWaypointIndex < size(waypointPositions, 1)
+            if state.nextWaypointIndex < size(servicePositions, 1)
                 agvObj.load(0.0);
                 state.phase = 'loading';
                 obj.serviceStates(agvObj.id) = state;
@@ -354,6 +359,7 @@ classdef Simulation < handle
                 obj.logEvent('unloading_started', agvObj.id, taskObj.id, ...
                     'Started unloading at final waypoint.');
             end
+            didStartService = true;
         end
 
         function finishLoading(obj, agvObj)
@@ -368,6 +374,17 @@ classdef Simulation < handle
             obj.serviceStates(agvObj.id) = state;
             agvObj.updateState('moving');
             obj.logEvent('loading_completed', agvObj.id, obj.primaryTaskId(agvObj), 'Loading completed.');
+        end
+
+        function servicePositions = servicePositionsForTask(~, taskObj)
+            %SERVICEPOSITIONSFORTASK Include the task start as the first load point.
+            waypointPositions = taskObj.getWaypointPositions();
+            if isempty(waypointPositions)
+                servicePositions = zeros(0, 2);
+                return;
+            end
+
+            servicePositions = agv.AGVClass.removeSequentialDuplicates([taskObj.start; waypointPositions]);
         end
 
         function completeTask(obj, agvObj)
