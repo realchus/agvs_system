@@ -58,6 +58,7 @@ classdef TimeWindowManager < handle
             if nargin < 3
                 existingWindows = [];
             end
+            hasExistingIndex = nargin >= 4 && isa(existingIndex, 'containers.Map');
             if nargin < 4
                 existingIndex = [];
             end
@@ -69,7 +70,7 @@ classdef TimeWindowManager < handle
                 'newWindow', newWindow, ...
                 'existingWindow', timewindow.TimeWindowManager.emptyWindowArray());
 
-            if isempty(existingIndex)
+            if ~hasExistingIndex
                 if isempty(existingWindows)
                     existingIndex = timewindow.TimeWindowManager.buildWindowIndex( ...
                         [obj.timeWindows; obj.invalidatedWindows]);
@@ -574,7 +575,9 @@ classdef TimeWindowManager < handle
 
         function key = getWindowResourceKey(window)
             %GETWINDOWRESOURCEKEY Return the conflict resource key for a window.
-            window = timewindow.TimeWindowManager.normalizeWindow(window);
+            if ~isfield(window, 'windowType')
+                window = timewindow.TimeWindowManager.normalizeWindow(window);
+            end
             if strcmp(window.windowType, 'node')
                 key = ['node:', timewindow.TimeWindowManager.getNodeKey(window.nodeIndex)];
             else

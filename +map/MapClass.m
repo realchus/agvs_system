@@ -58,7 +58,10 @@ classdef MapClass < handle
                 return;
             end
 
-            occupiedBy = obj.getOccupyingAgv(row, col);
+            occupiedBy = [];
+            if obj.grid(row, col) == 2
+                occupiedBy = obj.getOccupyingAgv(row, col);
+            end
             if ~isempty(occupiedBy)
                 tf = ~isempty(agvId) && occupiedBy == agvId;
                 return;
@@ -88,17 +91,22 @@ classdef MapClass < handle
                 error('MapClass:OutOfBounds', 'AGV position (%d, %d) is out of bounds.', row, col);
             end
 
-            occupiedBy = obj.getOccupyingAgv(row, col);
+            occupiedBy = [];
+            if obj.grid(row, col) == 2
+                occupiedBy = obj.getOccupyingAgv(row, col);
+            end
             if ~isempty(occupiedBy) && occupiedBy ~= agvId
                 error('MapClass:NotPassable', 'Cell (%d, %d) is already occupied by AGV %d.', row, col, occupiedBy);
             end
 
             if isKey(obj.agvOccupancy, agvId)
+                oldPosition = obj.agvOccupancy(agvId);
+                obj.grid(oldPosition(1), oldPosition(2)) = obj.baseGrid(oldPosition(1), oldPosition(2));
                 remove(obj.agvOccupancy, agvId);
             end
 
             obj.agvOccupancy(agvId) = [row, col];
-            obj.syncGridWithOccupancy();
+            obj.grid(row, col) = 2;
         end
 
         function clearAGVOccupancy(obj, agvId)
@@ -106,8 +114,9 @@ classdef MapClass < handle
             % Input:
             %   agvId - AGV identifier.
             if isKey(obj.agvOccupancy, agvId)
+                position = obj.agvOccupancy(agvId);
                 remove(obj.agvOccupancy, agvId);
-                obj.syncGridWithOccupancy();
+                obj.grid(position(1), position(2)) = obj.baseGrid(position(1), position(2));
             end
         end
 

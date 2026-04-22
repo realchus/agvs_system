@@ -387,3 +387,25 @@
 
 - 节点级时间窗比原边级模型更严格，性能测试单次 wall-clock 耗时约 `45.23s`。
 - 完整场景仍有 1 次临时任务分配失败日志，后续调度恢复并完成全部任务。
+
+## [2026-04-22] - Task: 性能分析后优化
+
+### What was done:
+
+- 优化 `+timewindow/TimeWindowManager.m` 的冲突检测，正确复用传入的空 `containers.Map` 索引，避免把空索引误判为未传入索引并反复重建全局窗口索引。
+- 减少 `getWindowResourceKey` 对已标准化窗口的重复 `normalizeWindow` 调用。
+- 优化 `+map/MapClass.m` 的 AGV 占用更新，`setAGVOccupancy` 和 `clearAGVOccupancy` 改为单格增量更新，不再每次重建整张动态地图。
+- 优化 `+sim/Simulation.m` 的主循环调度检查，缓存已完成任务数量和下一条 pending 任务释放时间，避免每个仿真步重复扫描/排序任务列表。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_performance"`，结果通过，单次 wall-clock 耗时约 `9.94s`。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过；最终性能测试耗时约 `8.84s`。
+
+### Notes:
+
+- 相比优化前 `47.74s` 的性能基准，本次优化后完整默认场景性能测试约提升到 `8.84s`。
+- 默认 10 AGV / 30 任务场景保持完成时间 `3560s`，完成任务数 `30`，碰撞次数 `0`。

@@ -19,6 +19,8 @@ classdef Simulation < handle
         taskCompletionTimes
         conflictCheckRequired
         parkingPositions
+        completedTaskCount
+        nextPendingRequestTime
     end
 
     methods
@@ -73,6 +75,8 @@ classdef Simulation < handle
             obj.taskCompletionTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
             obj.conflictCheckRequired = true;
             obj.parkingPositions = containers.Map('KeyType', 'double', 'ValueType', 'any');
+            obj.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+            obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
 
             for i = 1:numel(obj.agvPool)
                 obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
@@ -95,7 +99,7 @@ classdef Simulation < handle
             obj.logEvent('simulation_finished', 0, 0, 'Simulation finished.');
             results = struct( ...
                 'currentTime', obj.currentTime, ...
-                'completedTaskCount', sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList)), ...
+                'completedTaskCount', obj.completedTaskCount, ...
                 'eventLog', obj.eventLog, ...
                 'metrics', obj.buildMetrics());
         end
@@ -133,13 +137,22 @@ classdef Simulation < handle
         function didAssign = assignPendingTasks(obj)
             %ASSIGNPENDINGTASKS Dispatch ready tasks to idle AGVs.
             didAssign = false;
-            orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
             idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
             idleAgvs = obj.agvPool(idleMask);
+            if isempty(idleAgvs)
+                return;
+            end
+
+            if obj.currentTime + eps < obj.nextPendingRequestTime
+                return;
+            end
+
+            orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
 
             while ~isempty(idleAgvs)
                 nextTask = obj.findAssignableTask(orderedTasks);
                 if isempty(nextTask)
+                    obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
                     return;
                 end
 
@@ -162,6 +175,7 @@ classdef Simulation < handle
                     sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
                 idleAgvs(selectedIndex) = [];
             end
+            obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
         end
 
         function [selectedAgv, selectedIndex] = selectNearestIdleAgv(~, idleAgvs, targetPosition)
@@ -394,6 +408,9 @@ classdef Simulation < handle
                 return;
             end
 
+            if ~strcmp(taskObj.status, 'completed')
+                obj.completedTaskCount = obj.completedTaskCount + 1;
+            end
             taskObj.updateStatus('completed');
             obj.taskCompletionTimes(taskObj.id) = obj.currentTime;
             obj.map.clearTaskTarget(taskObj.id);
@@ -491,7 +508,7 @@ classdef Simulation < handle
 
         function tf = allTasksCompleted(obj)
             %ALLTASKSCOMPLETED Return true when every task is marked completed.
-            tf = all(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+            tf = obj.completedTaskCount >= numel(obj.taskList);
         end
 
         function tf = isSimulationComplete(obj)
@@ -560,7 +577,7 @@ classdef Simulation < handle
             %BUILDMETRICS Export scenario-level summary metrics.
             metrics = struct();
             metrics.totalTime = obj.currentTime;
-            metrics.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+            metrics.completedTaskCount = obj.completedTaskCount;
             metrics.collisionCount = sim.Simulation.countEvents(obj.eventLog, 'collision_detected');
             metrics.conflictResolutionCount = sim.Simulation.countEvents(obj.eventLog, 'conflict_resolved');
             metrics.replanCount = sim.Simulation.countEvents(obj.eventLog, 'path_replanned');
@@ -594,6 +611,16 @@ classdef Simulation < handle
                 completionTimes(i, 1) = struct( ...
                     'taskId', keysList(i), ...
                     'completionTime', obj.taskCompletionTimes(keysList(i)));
+            end
+        end
+
+        function nextRequestTime = computeNextPendingRequestTime(obj)
+            %COMPUTENEXTPENDINGREQUESTTIME Return the next unreleased pending task time.
+            nextRequestTime = inf;
+            for i = 1:numel(obj.taskList)
+                if strcmp(obj.taskList(i).status, 'pending')
+                    nextRequestTime = min(nextRequestTime, obj.taskList(i).requestTime);
+                end
             end
         end
     end
