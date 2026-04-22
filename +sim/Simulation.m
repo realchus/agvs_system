@@ -22,6 +22,7 @@ classdef Simulation < handle
         completedTaskCount
         nextPendingRequestTime
         taskAssignmentRetryTimes
+        parkingReservationWindows
     end
 
     methods
@@ -79,6 +80,7 @@ classdef Simulation < handle
             obj.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
             obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
             obj.taskAssignmentRetryTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
+            obj.parkingReservationWindows = containers.Map('KeyType', 'double', 'ValueType', 'any');
 
             for i = 1:numel(obj.agvPool)
                 obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
@@ -87,6 +89,7 @@ classdef Simulation < handle
 
             obj.syncMapOccupancy();
             obj.initializeAssignedTasks();
+            obj.updateParkingNodeReservations();
         end
 
         function results = run(obj)
@@ -129,6 +132,7 @@ classdef Simulation < handle
                 end
             end
 
+            obj.updateParkingNodeReservations();
             obj.syncMapOccupancy();
             obj.visualizer.render(obj.map, obj.agvPool, obj.currentTime, dynamicObstacles);
             obj.currentTime = obj.currentTime + dt;
@@ -139,9 +143,9 @@ classdef Simulation < handle
         function didAssign = assignPendingTasks(obj)
             %ASSIGNPENDINGTASKS Dispatch ready tasks to idle AGVs.
             didAssign = false;
-            idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
-            idleAgvs = obj.agvPool(idleMask);
-            if isempty(idleAgvs)
+            candidateMask = arrayfun(@(a) isempty(a.currentTask) && any(strcmp(a.state, {'idle', 'returning'})), obj.agvPool);
+            candidateAgvs = obj.agvPool(candidateMask);
+            if isempty(candidateAgvs)
                 return;
             end
 
@@ -152,14 +156,14 @@ classdef Simulation < handle
             orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
             skippedTaskIds = [];
 
-            while ~isempty(idleAgvs)
+            while ~isempty(candidateAgvs)
                 nextTask = obj.findAssignableTask(orderedTasks, skippedTaskIds);
                 if isempty(nextTask)
                     obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
                     return;
                 end
 
-                rankedIdleIndices = obj.rankIdleAgvs(idleAgvs, nextTask.start);
+                rankedIdleIndices = obj.rankIdleAgvs(candidateAgvs, nextTask.start);
                 success = false;
                 selectedAgv = [];
                 selectedIndex = 0;
@@ -169,11 +173,13 @@ classdef Simulation < handle
                 obj.map.registerTaskTarget(nextTask.id, [nextTask.start; nextTask.getWaypointPositions()]);
                 for candidateIdx = 1:numel(rankedIdleIndices)
                     selectedIndex = rankedIdleIndices(candidateIdx);
-                    selectedAgv = idleAgvs(selectedIndex);
+                    selectedAgv = candidateAgvs(selectedIndex);
+                    obj.prepareAgvForAssignment(selectedAgv);
                     [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(selectedAgv, nextTask, obj.currentTime);
                     if success
                         break;
                     end
+                    obj.updateParkingReservationForAgv(selectedAgv);
                 end
 
                 if ~success
@@ -193,7 +199,7 @@ classdef Simulation < handle
                 obj.clearTaskRetry(nextTask.id);
                 obj.logEvent('task_assigned', selectedAgv.id, nextTask.id, ...
                     sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
-                idleAgvs(selectedIndex) = [];
+                candidateAgvs(selectedIndex) = [];
             end
             obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
         end
@@ -340,6 +346,7 @@ classdef Simulation < handle
                     obj.timeWindowManager.releasePath(agvObj.id);
                     agvObj.setTimeWindows(timewindow.TimeWindowManager.emptyWindowArray());
                     obj.map.clearTaskTarget(-agvObj.id);
+                    obj.updateParkingReservationForAgv(agvObj);
                     obj.logEvent('parking_return_completed', agvObj.id, 0, 'AGV reached parking point.');
                 end
                 obj.recordTravelDistance(agvObj.id, previousPosition, agvObj.position);
@@ -499,8 +506,8 @@ classdef Simulation < handle
                 if taskId == 0
                     taskId = [];
                 end
-                gridPosition = round(agvObj.position);
-                obj.map.setAGVOccupancy(agvObj.id, gridPosition(1), gridPosition(2), taskId);
+                gridPositions = obj.occupancyCellsForAgv(agvObj);
+                obj.map.setAGVOccupancyCells(agvObj.id, gridPositions, taskId);
             end
         end
 
@@ -597,6 +604,20 @@ classdef Simulation < handle
             end
         end
 
+        function prepareAgvForAssignment(obj, agvObj)
+            %PREPAREAGVFORASSIGNMENT Clear return/parking reservations before dispatch.
+            obj.releaseParkingReservation(agvObj.id);
+            if strcmp(agvObj.state, 'returning')
+                obj.timeWindowManager.releasePath(agvObj.id);
+                obj.map.clearTaskTarget(-agvObj.id);
+                agvObj.assignPath([]);
+                agvObj.setTimeWindows(timewindow.TimeWindowManager.emptyWindowArray());
+                agvObj.updateState('idle');
+                obj.logEvent('parking_return_interrupted', agvObj.id, 0, ...
+                    'Interrupted parking return for a ready task.');
+            end
+        end
+
         function tf = isTaskRetryCoolingDown(obj, taskId)
             %ISTASKRETRYCOOLINGDOWN Return true when a deferred task should wait.
             tf = isKey(obj.taskAssignmentRetryTimes, taskId) && ...
@@ -638,11 +659,89 @@ classdef Simulation < handle
                 if taskId == 0
                     taskId = [];
                 end
-                gridPosition = round(otherAgv.position);
-                if returnMap.isPassable(gridPosition(1), gridPosition(2), otherAgv.id, taskId)
-                    returnMap.setAGVOccupancy(otherAgv.id, gridPosition(1), gridPosition(2), taskId);
+                gridPositions = obj.occupancyCellsForAgv(otherAgv);
+                passableMask = false(size(gridPositions, 1), 1);
+                for j = 1:size(gridPositions, 1)
+                    gridPosition = gridPositions(j, :);
+                    passableMask(j) = returnMap.isPassable(gridPosition(1), gridPosition(2), otherAgv.id, taskId);
+                end
+                if any(passableMask)
+                    returnMap.setAGVOccupancyCells(otherAgv.id, gridPositions(passableMask, :), taskId);
                 end
             end
+        end
+
+        function updateParkingNodeReservations(obj)
+            %UPDATEPARKINGNODERESERVATIONS Keep idle parked AGVs reserved.
+            for i = 1:numel(obj.agvPool)
+                obj.updateParkingReservationForAgv(obj.agvPool(i));
+            end
+        end
+
+        function updateParkingReservationForAgv(obj, agvObj)
+            %UPDATEPARKINGRESERVATIONFORAGV Reserve/release one parked AGV node.
+            shouldReserve = isempty(agvObj.currentTask) && strcmp(agvObj.state, 'idle') && ...
+                isempty(agvObj.path) && obj.isAgvParked(agvObj);
+            if shouldReserve
+                obj.reserveParkingReservation(agvObj);
+            else
+                obj.releaseParkingReservation(agvObj.id);
+            end
+        end
+
+        function reserveParkingReservation(obj, agvObj)
+            %RESERVEPARKINGRESERVATION Register a long node window for parking.
+            if isKey(obj.parkingReservationWindows, agvObj.id)
+                return;
+            end
+
+            parkingPosition = obj.parkingPositionFor(agvObj);
+            totalTime = sim.Simulation.configValue(obj.config, 'totalTime', 120.0);
+            endTime = max(totalTime + 1.0, obj.currentTime + 1.0);
+            parkingWindow = timewindow.TimeWindowManager.buildNodeWindow( ...
+                parkingPosition, obj.currentTime, endTime, agvObj.id);
+            [hasConflict, ~] = obj.timeWindowManager.detectConflict(parkingWindow);
+            if hasConflict
+                obj.logEvent('parking_reservation_failed', agvObj.id, 0, ...
+                    'Parking node reservation conflicted.');
+                return;
+            end
+
+            obj.timeWindowManager.timeWindows(end + 1, 1) = parkingWindow;
+            obj.parkingReservationWindows(agvObj.id) = parkingWindow;
+        end
+
+        function releaseParkingReservation(obj, agvId)
+            %RELEASEPARKINGRESERVATION Remove the stored parking node window.
+            if ~isKey(obj.parkingReservationWindows, agvId)
+                return;
+            end
+
+            parkingWindow = obj.parkingReservationWindows(agvId);
+            keepMask = true(numel(obj.timeWindowManager.timeWindows), 1);
+            for i = 1:numel(obj.timeWindowManager.timeWindows)
+                if sim.Simulation.isSameWindow(obj.timeWindowManager.timeWindows(i), parkingWindow)
+                    keepMask(i) = false;
+                end
+            end
+            obj.timeWindowManager.timeWindows = obj.timeWindowManager.timeWindows(keepMask);
+            remove(obj.parkingReservationWindows, agvId);
+        end
+
+        function cells = occupancyCellsForAgv(~, agvObj)
+            %OCCUPANCYCELLSFORAGV Return grid cells occupied by an AGV segment.
+            currentCell = round(double(agvObj.position(:))');
+            cells = currentCell;
+            if norm(double(agvObj.position(:))' - currentCell) <= 1e-9
+                return;
+            end
+            if isempty(agvObj.path) || agvObj.pathIndex > size(agvObj.path, 1)
+                return;
+            end
+
+            previousIndex = max(1, agvObj.pathIndex - 1);
+            segmentCells = [agvObj.path(previousIndex, :); agvObj.path(agvObj.pathIndex, :)];
+            cells = unique(round(double(segmentCells)), 'rows', 'stable');
         end
 
         function parkingPosition = parkingPositionFor(obj, agvObj)
@@ -797,6 +896,18 @@ classdef Simulation < handle
             end
 
             count = sum(strcmp({eventLog.type}, char(string(type))));
+        end
+
+        function tf = isSameWindow(windowA, windowB)
+            %ISSAMEWINDOW Compare time-window resource, owner, and timing.
+            windowA = timewindow.TimeWindowManager.normalizeWindow(windowA);
+            windowB = timewindow.TimeWindowManager.normalizeWindow(windowB);
+            tf = strcmp(windowA.windowType, windowB.windowType) && ...
+                isequal(windowA.edgeIndex, windowB.edgeIndex) && ...
+                isequal(windowA.nodeIndex, windowB.nodeIndex) && ...
+                windowA.agvId == windowB.agvId && ...
+                abs(windowA.startTime - windowB.startTime) <= eps && ...
+                abs(windowA.endTime - windowB.endTime) <= eps;
         end
     end
 end
