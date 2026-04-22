@@ -695,7 +695,8 @@ classdef SchedulerClass < handle
             workingMap = map.MapClass(config.baseGrid, config.colors);
 
             for i = 1:numel(config.occupancy)
-                workingMap.setAGVOccupancyCells(config.occupancy(i).id, config.occupancy(i).position);
+                workingMap.setAGVOccupancy(config.occupancy(i).id, ...
+                    config.occupancy(i).position(1), config.occupancy(i).position(2));
             end
 
             for i = 1:numel(config.taskTargets)

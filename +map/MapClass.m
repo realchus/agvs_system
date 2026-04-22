@@ -87,57 +87,26 @@ classdef MapClass < handle
             if nargin < 5
                 taskId = [];
             end
-            obj.setAGVOccupancyCells(agvId, [row, col], taskId);
-        end
-
-        function setAGVOccupancyCells(obj, agvId, positions, taskId)
-            %SETAGVOCCUPANCYCELLS Set one or more occupied cells for an AGV.
-            % Inputs:
-            %   agvId     - AGV identifier.
-            %   positions - N-by-2 grid coordinates occupied by the AGV.
-            %   taskId    - Optional task identifier for target-window access.
-            if nargin < 4
-                taskId = []; %#ok<NASGU>
+            if ~obj.isInside(row, col)
+                error('MapClass:OutOfBounds', 'AGV position (%d, %d) is out of bounds.', row, col);
             end
-            if isempty(positions)
-                obj.clearAGVOccupancy(agvId);
-                return;
-            end
-            validateattributes(positions, {'numeric'}, {'2d', 'ncols', 2, 'finite'});
-            if any(mod(positions(:), 1) ~= 0)
-                error('MapClass:InvalidOccupancy', 'AGV occupancy positions must use integer grid coordinates.');
-            end
-            positions = unique(double(positions), 'rows', 'stable');
 
-            for i = 1:size(positions, 1)
-                row = positions(i, 1);
-                col = positions(i, 2);
-                if ~obj.isInside(row, col)
-                    error('MapClass:OutOfBounds', 'AGV position (%d, %d) is out of bounds.', row, col);
-                end
-
-                occupiedBy = [];
-                if obj.grid(row, col) == 2
-                    occupiedBy = obj.getOccupyingAgv(row, col);
-                end
-                if ~isempty(occupiedBy) && occupiedBy ~= agvId
-                    error('MapClass:NotPassable', 'Cell (%d, %d) is already occupied by AGV %d.', row, col, occupiedBy);
-                end
+            occupiedBy = [];
+            if obj.grid(row, col) == 2
+                occupiedBy = obj.getOccupyingAgv(row, col);
+            end
+            if ~isempty(occupiedBy) && occupiedBy ~= agvId
+                error('MapClass:NotPassable', 'Cell (%d, %d) is already occupied by AGV %d.', row, col, occupiedBy);
             end
 
             if isKey(obj.agvOccupancy, agvId)
-                oldPositions = obj.agvOccupancy(agvId);
-                for i = 1:size(oldPositions, 1)
-                    oldPosition = oldPositions(i, :);
-                    obj.grid(oldPosition(1), oldPosition(2)) = obj.baseGrid(oldPosition(1), oldPosition(2));
-                end
+                oldPosition = obj.agvOccupancy(agvId);
+                obj.grid(oldPosition(1), oldPosition(2)) = obj.baseGrid(oldPosition(1), oldPosition(2));
                 remove(obj.agvOccupancy, agvId);
             end
 
-            obj.agvOccupancy(agvId) = positions;
-            for i = 1:size(positions, 1)
-                obj.grid(positions(i, 1), positions(i, 2)) = 2;
-            end
+            obj.agvOccupancy(agvId) = [row, col];
+            obj.grid(row, col) = 2;
         end
 
         function clearAGVOccupancy(obj, agvId)
@@ -145,12 +114,9 @@ classdef MapClass < handle
             % Input:
             %   agvId - AGV identifier.
             if isKey(obj.agvOccupancy, agvId)
-                positions = obj.agvOccupancy(agvId);
+                position = obj.agvOccupancy(agvId);
                 remove(obj.agvOccupancy, agvId);
-                for i = 1:size(positions, 1)
-                    position = positions(i, :);
-                    obj.grid(position(1), position(2)) = obj.baseGrid(position(1), position(2));
-                end
+                obj.grid(position(1), position(2)) = obj.baseGrid(position(1), position(2));
             end
         end
 
@@ -240,8 +206,8 @@ classdef MapClass < handle
             keysList = obj.agvOccupancy.keys;
             for i = 1:numel(keysList)
                 candidateId = keysList{i};
-                positions = obj.agvOccupancy(candidateId);
-                if any(all(positions == [row, col], 2))
+                position = obj.agvOccupancy(candidateId);
+                if isequal(position, [row, col])
                     agvId = candidateId;
                     return;
                 end
@@ -262,11 +228,8 @@ classdef MapClass < handle
             obj.grid = obj.baseGrid;
             keysList = obj.agvOccupancy.keys;
             for i = 1:numel(keysList)
-                positions = obj.agvOccupancy(keysList{i});
-                for j = 1:size(positions, 1)
-                    position = positions(j, :);
-                    obj.grid(position(1), position(2)) = 2;
-                end
+                position = obj.agvOccupancy(keysList{i});
+                obj.grid(position(1), position(2)) = 2;
             end
         end
 

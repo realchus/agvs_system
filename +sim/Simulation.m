@@ -506,8 +506,8 @@ classdef Simulation < handle
                 if taskId == 0
                     taskId = [];
                 end
-                gridPositions = obj.occupancyCellsForAgv(agvObj);
-                obj.map.setAGVOccupancyCells(agvObj.id, gridPositions, taskId);
+                gridPosition = round(agvObj.position);
+                obj.map.setAGVOccupancy(agvObj.id, gridPosition(1), gridPosition(2), taskId);
             end
         end
 
@@ -659,14 +659,9 @@ classdef Simulation < handle
                 if taskId == 0
                     taskId = [];
                 end
-                gridPositions = obj.occupancyCellsForAgv(otherAgv);
-                passableMask = false(size(gridPositions, 1), 1);
-                for j = 1:size(gridPositions, 1)
-                    gridPosition = gridPositions(j, :);
-                    passableMask(j) = returnMap.isPassable(gridPosition(1), gridPosition(2), otherAgv.id, taskId);
-                end
-                if any(passableMask)
-                    returnMap.setAGVOccupancyCells(otherAgv.id, gridPositions(passableMask, :), taskId);
+                gridPosition = round(otherAgv.position);
+                if returnMap.isPassable(gridPosition(1), gridPosition(2), otherAgv.id, taskId)
+                    returnMap.setAGVOccupancy(otherAgv.id, gridPosition(1), gridPosition(2), taskId);
                 end
             end
         end
@@ -726,22 +721,6 @@ classdef Simulation < handle
             end
             obj.timeWindowManager.timeWindows = obj.timeWindowManager.timeWindows(keepMask);
             remove(obj.parkingReservationWindows, agvId);
-        end
-
-        function cells = occupancyCellsForAgv(~, agvObj)
-            %OCCUPANCYCELLSFORAGV Return grid cells occupied by an AGV segment.
-            currentCell = round(double(agvObj.position(:))');
-            cells = currentCell;
-            if norm(double(agvObj.position(:))' - currentCell) <= 1e-9
-                return;
-            end
-            if isempty(agvObj.path) || agvObj.pathIndex > size(agvObj.path, 1)
-                return;
-            end
-
-            previousIndex = max(1, agvObj.pathIndex - 1);
-            segmentCells = [agvObj.path(previousIndex, :); agvObj.path(agvObj.pathIndex, :)];
-            cells = unique(round(double(segmentCells)), 'rows', 'stable');
         end
 
         function parkingPosition = parkingPositionFor(obj, agvObj)

@@ -8,7 +8,6 @@ testSingleTaskLifecycle();
 testConflictResolutionInsideStep();
 testPendingTasksBlockIdleReturn();
 testParkingReturnAvoidsOtherParkingCells();
-testSegmentOccupancySyncUsesPathEndpoints();
 testIdleParkingCreatesNodeReservation();
 testReturningAgvCanBeInterruptedForTask();
 
@@ -159,35 +158,6 @@ if ~isempty(agvReturning.path)
     assert(~any(all(agvReturning.path == [1, 3], 2)), ...
         'Parking return route should avoid another AGV parking cell.');
 end
-end
-
-function testSegmentOccupancySyncUsesPathEndpoints()
-simMap = map.MapClass(zeros(2, 3), map.MapClass.defaultColors());
-vehicle = agv.AGVClass(1, [1, 1], 1.0);
-completedTask = task.TaskClass(901, [2, 1], ...
-    struct('name', 'AlreadyDone', 'position', [2, 2]), ...
-    1, 0, 'completed');
-
-config = struct( ...
-    'dt', 0.1, ...
-    'totalTime', 1.0, ...
-    'enableVisualization', false, ...
-    'visualizerVisible', false, ...
-    'returnToParkingWhenIdle', false, ...
-    'waitTimeout', 2.0, ...
-    'pathLibraryData', repmat(struct(), 0, 1), ...
-    'dynamicObstacleSchedule', repmat(struct(), 0, 1));
-
-simulation = sim.Simulation(simMap, vehicle, completedTask, config);
-vehicle.path = [1, 1; 1, 2];
-vehicle.pathIndex = 2;
-vehicle.position = [1, 1.5];
-vehicle.updateState('moving');
-simulation.step();
-
-occupiedCells = simulation.map.agvOccupancy(vehicle.id);
-assert(isequal(occupiedCells, [1, 1; 1, 2]), ...
-    'Map occupancy should mirror the current path segment endpoints, not a rounded single cell.');
 end
 
 function testIdleParkingCreatesNodeReservation()
