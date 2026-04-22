@@ -54,5 +54,12 @@ defaultPool = agv.AGVClass.createDefaultPool();
 assert(numel(defaultPool) == 3, 'Default AGV pool should contain three vehicles.');
 assert(isequal(defaultPool(2).position, [1, 32]), 'Default AGV pool positions are incorrect.');
 
+inputPool = agv.AGVClass.loadPool(fullfile(projectRoot, 'input', 'agv_pool.json'));
+assert(numel(inputPool) == 10, 'Input AGV pool should contain ten vehicles.');
+inputPositions = reshape([inputPool.position], 2, []).';
+assert(isequal(inputPositions(:, 1), ones(10, 1)), 'Input AGVs should be placed on parking row 1.');
+assert(isequal(inputPositions(:, 2), [21; 23; 26; 28; 30; 33; 35; 37; 40; 42]), ...
+    'Input AGVs should be evenly distributed across the parking area.');
+
 disp('test_agv passed');
 end

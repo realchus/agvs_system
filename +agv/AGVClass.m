@@ -411,6 +411,60 @@ classdef AGVClass < handle
             end
         end
 
+        function agvPool = loadPool(sourcePath)
+            %LOADPOOL Load AGV definitions from a JSON or MAT file.
+            if nargin < 1 || isempty(sourcePath)
+                sourcePath = fullfile(pwd, 'input', 'agv_pool.json');
+            end
+
+            validateattributes(sourcePath, {'char', 'string'}, {'nonempty'});
+            sourcePath = char(string(sourcePath));
+            if ~isfile(sourcePath)
+                error('AGVClass:FileNotFound', 'AGV pool file not found: %s', sourcePath);
+            end
+
+            [~, ~, ext] = fileparts(sourcePath);
+            switch lower(ext)
+                case '.json'
+                    rawData = jsondecode(fileread(sourcePath));
+                case '.mat'
+                    loadedData = load(sourcePath);
+                    if isfield(loadedData, 'agvPoolData')
+                        rawData = loadedData.agvPoolData;
+                    elseif isfield(loadedData, 'agvPool')
+                        rawData = loadedData.agvPool;
+                    else
+                        error('AGVClass:MissingAgvVariable', ...
+                            'MAT file %s does not contain agvPoolData or agvPool.', sourcePath);
+                    end
+                otherwise
+                    error('AGVClass:UnsupportedFormat', ...
+                        'Unsupported AGV pool format: %s. Use .json or .mat.', ext);
+            end
+
+            if isstruct(rawData) && isscalar(rawData) && isfield(rawData, 'agvPool')
+                rawData = rawData.agvPool;
+            elseif isstruct(rawData) && isscalar(rawData) && isfield(rawData, 'agvPoolData')
+                rawData = rawData.agvPoolData;
+            end
+
+            if isempty(rawData)
+                agvPool = repmat(agv.AGVClass(1, [1, 1], 1.0), 0, 1);
+                return;
+            end
+            if ~isstruct(rawData)
+                error('AGVClass:InvalidAgvData', 'AGV pool data must be a struct array.');
+            end
+
+            agvPool = repmat(agv.AGVClass(1, [1, 1], 1.0), numel(rawData), 1);
+            for i = 1:numel(rawData)
+                agvId = agv.AGVClass.readField(rawData(i), {'id'});
+                position = agv.AGVClass.readField(rawData(i), {'position', 'start', 'startPos'});
+                speed = agv.AGVClass.readField(rawData(i), {'speed'}, 1.0);
+                agvPool(i, 1) = agv.AGVClass(agvId, position, speed);
+            end
+        end
+
         function agvPoolData = poolToStructArray(agvPool)
             %POOLTOSTRUCTARRAY Convert an AGV object array to a struct array.
             if isempty(agvPool)
@@ -489,6 +543,27 @@ classdef AGVClass < handle
                 keepMask(i) = ~isequal(path(i, :), path(i - 1, :));
             end
             path = path(keepMask, :);
+        end
+
+        function value = readField(data, names, defaultValue)
+            %READFIELD Read the first available field alias from an AGV payload.
+            if nargin < 3
+                defaultValue = [];
+            end
+
+            for i = 1:numel(names)
+                if isfield(data, names{i}) && ~isempty(data.(names{i}))
+                    value = data.(names{i});
+                    return;
+                end
+            end
+
+            if ~isempty(defaultValue)
+                value = defaultValue;
+                return;
+            end
+
+            error('AGVClass:MissingField', 'AGV data is missing required field: %s', names{1});
         end
     end
 end

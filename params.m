@@ -7,7 +7,7 @@ function config = params()
 
 config = struct();
 config.dt = 0.1;
-config.totalTime = 180.0;
+config.totalTime = 4200.0;
 config.enableVisualization = usejava('desktop');
 config.visualizerVisible = config.enableVisualization;
 config.waitTimeout = 5.0;

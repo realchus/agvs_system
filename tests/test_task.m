@@ -62,5 +62,11 @@ taskStructs = task.TaskClass.toStructArray(matTasks);
 assert(numel(taskStructs) == 5 && strcmp(taskStructs(5).status, 'pending'), ...
     'Task struct serialization failed.');
 
+inputTasks = task.TaskParser(fullfile(projectRoot, 'input', 'task_list.json'));
+assert(numel(inputTasks) == 30, 'Input task list should contain thirty tasks.');
+inputStarts = reshape([inputTasks.start], 2, []).';
+assert(all(inputStarts(:, 1) ~= 1), 'Input task starts should not use AGV parking cells.');
+assert(inputTasks(30).requestTime == 3480, 'Input request-time schedule should preserve the final task.');
+
 disp('test_task passed');
 end

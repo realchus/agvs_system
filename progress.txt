@@ -293,3 +293,27 @@
 ### Notes:
 
 - 第 4 个右侧上货窗口任务请求时间调整为 `90s`，避免默认 3 AGV 场景中右侧入库任务在主通道形成相向硬冲突。
+
+## [2026-04-22] - Task: input 数据入口与 10 AGV / 30 任务场景
+
+### What was done:
+
+- 新增 `input/agv_pool.json`，定义 10 台 AGV，沿第 1 行停车区第 21..42 列尽量均匀分布。
+- 新增 `input/task_list.json`，定义 30 个默认任务，任务起终点使用货架、左侧拣货窗口和右侧上货窗口。
+- 新增 `input/README.md`，说明用户可直接修改 JSON 数据来做自定义测试。
+- 扩展 `agv.AGVClass.loadPool()`，支持从 JSON/MAT 文件加载 AGV 池。
+- 修改 `sim.Simulation.fromDefaults()` 和无参构造逻辑，优先读取 `input/agv_pool.json` 与 `input/task_list.json`；若 input 文件不存在，则回退到 `data/` 默认数据。
+- 调整派单策略，默认从空闲 AGV 中选择距离任务起点最近的车辆，减少 10 AGV 场景中的无谓横穿。
+- 将默认仿真时长调整为 `4200s`，覆盖 30 任务输入场景。
+- 更新 `tests/test_agv.m`、`tests/test_task.m`、`tests/test_scenario.m` 和 `tests/test_performance.m`，验证 input 数据入口、10 AGV 和 30 任务场景。
+
+### Testing:
+
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 10 AGV / 30 任务默认场景完成时间 `3535s`，完成任务数 `30`，碰撞次数 `0`。
+- `test_performance` 单次 10 AGV / 30 任务运行 wall-clock 耗时约 `22.93s`。
+
+### Notes:
+
+- 当前 input 场景采用保守的 `120s` 任务释放间隔，便于作为稳定基准；用户可缩短 `requestTime` 做更激进的拥堵压测。
+- 当前时间窗模型主要约束边冲突，尚未引入完整节点占用时间窗；密集释放任务时仍建议观察 `collisionCount` 和事件日志。

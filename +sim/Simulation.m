@@ -26,11 +26,14 @@ classdef Simulation < handle
             if nargin < 1 || isempty(mapObj)
                 mapObj = map.MapClass.createDefaultMap();
             end
-            if nargin < 2 || isempty(agvPool)
-                agvPool = agv.AGVClass.createDefaultPool();
-            end
-            if nargin < 3 || isempty(taskList)
-                taskList = task.TaskParser(fullfile(pwd, 'data', 'task_list.mat'));
+            if nargin < 2 || isempty(agvPool) || nargin < 3 || isempty(taskList)
+                [defaultAgvPool, defaultTaskList] = sim.Simulation.loadDefaultInputData();
+                if nargin < 2 || isempty(agvPool)
+                    agvPool = defaultAgvPool;
+                end
+                if nargin < 3 || isempty(taskList)
+                    taskList = defaultTaskList;
+                end
             end
             if nargin < 4 || isempty(config)
                 config = params();
@@ -128,28 +131,38 @@ classdef Simulation < handle
             idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
             idleAgvs = obj.agvPool(idleMask);
 
-            for i = 1:numel(idleAgvs)
+            while ~isempty(idleAgvs)
                 nextTask = obj.findAssignableTask(orderedTasks);
                 if isempty(nextTask)
                     return;
                 end
 
+                [selectedAgv, selectedIndex] = obj.selectNearestIdleAgv(idleAgvs, nextTask.start);
                 obj.map.registerTaskTarget(nextTask.id, [nextTask.start; nextTask.getWaypointPositions()]);
-                [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(idleAgvs(i), nextTask, obj.currentTime);
+                [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(selectedAgv, nextTask, obj.currentTime);
                 if ~success
-                    obj.logEvent('task_assignment_failed', idleAgvs(i).id, nextTask.id, 'No feasible route could be reserved.');
+                    obj.logEvent('task_assignment_failed', selectedAgv.id, nextTask.id, 'No feasible route could be reserved.');
+                    idleAgvs(selectedIndex) = [];
                     continue;
                 end
 
                 nextTask.updateStatus('executing');
-                obj.serviceStates(idleAgvs(i).id) = struct( ...
+                obj.serviceStates(selectedAgv.id) = struct( ...
                     'taskId', nextTask.id, ...
                     'nextWaypointIndex', 1, ...
                     'phase', 'travel');
                 didAssign = true;
-                obj.logEvent('task_assigned', idleAgvs(i).id, nextTask.id, ...
+                obj.logEvent('task_assigned', selectedAgv.id, nextTask.id, ...
                     sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
+                idleAgvs(selectedIndex) = [];
             end
+        end
+
+        function [selectedAgv, selectedIndex] = selectNearestIdleAgv(~, idleAgvs, targetPosition)
+            %SELECTNEARESTIDLEAGV Pick the idle AGV closest to the task start.
+            distances = arrayfun(@(a) sum(abs(round(a.position) - targetPosition)), idleAgvs);
+            [~, selectedIndex] = min(distances);
+            selectedAgv = idleAgvs(selectedIndex);
         end
 
         function nextTask = findAssignableTask(obj, orderedTasks)
@@ -475,11 +488,31 @@ classdef Simulation < handle
                 config = params();
             end
 
+            [agvPool, taskList] = sim.Simulation.loadDefaultInputData();
             obj = sim.Simulation( ...
                 map.MapClass.createDefaultMap(), ...
-                agv.AGVClass.createDefaultPool(), ...
-                task.TaskParser(fullfile(pwd, 'data', 'task_list.mat')), ...
+                agvPool, ...
+                taskList, ...
                 config);
+        end
+
+        function [agvPool, taskList] = loadDefaultInputData()
+            %LOADDEFAULTINPUTDATA Prefer user-editable JSON files under input/.
+            inputDir = fullfile(pwd, 'input');
+            agvJsonPath = fullfile(inputDir, 'agv_pool.json');
+            taskJsonPath = fullfile(inputDir, 'task_list.json');
+
+            if isfile(agvJsonPath)
+                agvPool = agv.AGVClass.loadPool(agvJsonPath);
+            else
+                agvPool = agv.AGVClass.createDefaultPool();
+            end
+
+            if isfile(taskJsonPath)
+                taskList = task.TaskParser(taskJsonPath);
+            else
+                taskList = task.TaskParser(fullfile(pwd, 'data', 'task_list.mat'));
+            end
         end
 
         function value = configValue(config, fieldName, defaultValue)

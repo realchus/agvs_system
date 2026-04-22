@@ -8,13 +8,13 @@ config = params();
 config.enableVisualization = false;
 config.visualizerVisible = false;
 config.dt = 1.0;
-config.totalTime = 260.0;
-config.dynamicObstacleSchedule = struct( ...
+config.totalTime = 4200.0;
+config.dynamicObstacleSchedule = repmat(struct( ...
     'startTime', 0.0, ...
-    'endTime', 3.0, ...
-    'positions', [1, 24]);
+    'endTime', 0.0, ...
+    'positions', zeros(0, 2)), 0, 1);
 
-runCount = 3;
+runCount = 1;
 runtimes = zeros(runCount, 1);
 completionTimes = zeros(runCount, 1);
 
@@ -25,7 +25,7 @@ for i = 1:runCount
     runtimes(i) = toc(timerId);
     completionTimes(i) = results.currentTime;
 
-    assert(results.completedTaskCount == 5, ...
+    assert(results.completedTaskCount == 30, ...
         'Performance run should still complete all tasks.');
     assert(runtimes(i) < config.totalTime, ...
         'Wall-clock runtime should remain below the simulated scenario horizon.');

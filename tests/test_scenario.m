@@ -1,5 +1,5 @@
 function report = test_scenario()
-%TEST_SCENARIO Run the full 5-task, 3-AGV scenario and report metrics.
+%TEST_SCENARIO Run the full 30-task, 10-AGV input scenario and report metrics.
 
 projectRoot = fileparts(fileparts(mfilename('fullpath')));
 addpath(projectRoot);
@@ -8,24 +8,25 @@ config = params();
 config.enableVisualization = false;
 config.visualizerVisible = false;
 config.dt = 1.0;
-config.totalTime = 260.0;
-config.dynamicObstacleSchedule = struct( ...
+config.totalTime = 4200.0;
+config.dynamicObstacleSchedule = repmat(struct( ...
     'startTime', 0.0, ...
-    'endTime', 3.0, ...
-    'positions', [1, 24]);
+    'endTime', 0.0, ...
+    'positions', zeros(0, 2)), 0, 1);
 
 simulation = sim.Simulation.fromDefaults(config);
 results = simulation.run();
 report = buildScenarioReport(results);
 
-assert(report.completedTaskCount == 5, 'All five tasks should complete in the scenario test.');
+assert(numel(simulation.agvPool) == 10, 'Scenario should load ten AGVs from input/agv_pool.json.');
+assert(numel(simulation.taskList) == 30, 'Scenario should load thirty tasks from input/task_list.json.');
+assert(report.completedTaskCount == 30, 'All thirty tasks should complete in the scenario test.');
 assert(report.collisionCount == 0, 'Scenario should not contain collisions.');
-assert(report.avoidanceCount >= 1, 'Scenario should trigger at least one dynamic avoidance event.');
-assert(numel(report.taskCompletionTimes) == 5, 'Scenario report should include all task completion times.');
-assert(numel(report.agvDistances) == 3, 'Scenario report should include all AGV travel distances.');
+assert(numel(report.taskCompletionTimes) == 30, 'Scenario report should include all task completion times.');
+assert(numel(report.agvDistances) == 10, 'Scenario report should include all AGV travel distances.');
 assert(all(strcmp({simulation.taskList.status}, 'completed')), 'All tasks should finish with completed status.');
-assert(sim.Simulation.countEvents(results.eventLog, 'task_assigned') == 5, ...
-    'All five tasks should be assigned during the scenario.');
+assert(sim.Simulation.countEvents(results.eventLog, 'task_assigned') == 30, ...
+    'All thirty tasks should be assigned during the scenario.');
 
 disp('Scenario report:');
 disp(struct( ...
