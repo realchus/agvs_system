@@ -476,3 +476,31 @@
 
 - 当前可视化中的蓝色虚线来自 `Visualizer` 对 `agvObj.path` 的绘制，表示 AGV 当前剩余/计划路径。
 - 当前可视化没有绘制 AGV 历史实线轨迹；地图网格实线来自 `MapClass.plot` 的栅格线，仅表示地图单元格边界。
+
+## [2026-04-22] - Task: 调度与时间窗性能优化
+
+### What was done:
+
+- 修复默认路径库加载链路：`Simulation` 未显式配置 `pathLibraryData` 时会加载默认路径库；显式传入空路径库的单元测试仍保持禁用路径库语义。
+- 修改 `data/createPathLibrary.m`，优先基于 `input/task_list.json` 生成默认路径库，并重新生成包含 30 个 input 任务的 `data/path_library.mat`。
+- 为调度器增加路径库匹配校验，避免同 ID 旧路径库条目被误用于当前任务。
+- 为 fallback A* 路径生成增加任务级缓存；缓存路径若预留失败，会为当前 AGV 重新生成一次路径兜底，兼顾性能和拥堵场景鲁棒性。
+- 增加派单前轻量候选过滤，默认首轮只对评分前 `8` 台空闲 AGV 做完整路径预留；任务被延迟后重试时放开全部候选。
+- 将时间窗资源索引改为数值矩阵存储，并使用二分插入维护资源内有序窗口，减少 struct 排序和归一化开销。
+- 增加 per-AGV 时间窗 ID 索引，`releasePath(agvId)` 优先通过 AGV 索引定位窗口。
+- 弱化全局两两冲突检查：初始化/外部预置窗口仍检查一次，正常派单和返航依赖 `reservePath` 的冲突保证，不再额外触发全局扫描。
+- 更新 `tests/test_scheduler.m`，显式生成测试所需路径库，避免依赖全局 `data/path_library.mat` 的当前任务集。
+- 更新 `tests/test_task.m`，同步当前 `input/task_list.json` 的 30 单零时刻释放压测口径。
+
+### Testing:
+
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 默认 10 AGV / 30 任务场景完成时间 `310s`，完成任务数 `30`，碰撞次数 `0`，重规划次数 `0`，任务分配失败次数 `0`。
+- `test_performance` 单次 wall-clock 耗时约 `20.08s`。
+- profile 验证默认场景中 `PathLibrary.generateLibrary` 调用次数降为 `0`，说明默认路径库已命中。
+- 持续释放测试：`20s/单` 完成 30 单，0 延迟，中段吞吐约 `168.47 单/小时`；`15s/单` 完成 30 单，3 次派单延迟，中段吞吐约 `221.36 单/小时`；`12s/单` 仍会出现占用冲突。
+
+### Notes:
+
+- 当前默认 input 仍是 30 单全部 `requestTime=0` 的满负载压测口径。
+- 若要长期采用常态吞吐评估，建议另建独立稳态测试脚本，固定使用 `20s/单` 或更长释放间隔，避免和满负载压测混在同一个 input 文件中。

@@ -67,11 +67,8 @@ assert(numel(inputTasks) == 30, 'Input task list should contain thirty tasks.');
 inputStarts = reshape([inputTasks.start], 2, []).';
 assert(all(inputStarts(:, 1) ~= 1), 'Input task starts should not use AGV parking cells.');
 inputRequestTimes = [inputTasks.requestTime];
-expectedPairedSchedule = 0:120:1680;
-assert(isequal(inputRequestTimes(1:15), expectedPairedSchedule), ...
-    'Outbound input tasks should use the paired 120-second release schedule.');
-assert(isequal(inputRequestTimes(16:30), expectedPairedSchedule), ...
-    'Inbound input tasks should be paired with outbound releases.');
+assert(all(inputRequestTimes == 0), ...
+    'Input stress task list should release all thirty tasks at time zero.');
 
 disp('test_task passed');
 end

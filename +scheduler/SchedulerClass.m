@@ -13,6 +13,7 @@ classdef SchedulerClass < handle
         timeWindowsGlobal
         priorityWeight
         emergencyPriorityBoost
+        generatedPathCache
     end
 
     methods
@@ -48,6 +49,7 @@ classdef SchedulerClass < handle
             obj.timeWindowsGlobal = obj.timeWindowManager.timeWindows;
             obj.priorityWeight = 0.1;
             obj.emergencyPriorityBoost = 1000;
+            obj.generatedPathCache = containers.Map('KeyType', 'char', 'ValueType', 'any');
             obj.taskQueue = scheduler.SchedulerClass.emptyTaskArray();
 
             obj.updatePriority(0.0);
@@ -154,6 +156,38 @@ classdef SchedulerClass < handle
                 assignedWindows = reservedWindows;
                 success = true;
                 return;
+            end
+
+            if strcmp(sourceLabel, 'astar-cache')
+                freshPaths = obj.generateOnDemandPaths(taskObj, agvObj, false);
+                sourceLabel = 'astar';
+                for i = 1:numel(freshPaths)
+                    executablePath = obj.buildExecutablePath(agvObj, taskObj, freshPaths(i).nodes);
+                    if isempty(executablePath)
+                        continue;
+                    end
+
+                    nodeDwellTimes = obj.buildNodeDwellTimes(agvObj, taskObj, executablePath);
+                    [reservedWindows, conflictInfo] = obj.timeWindowManager.reservePath( ...
+                        agvObj.id, executablePath, startTime, agvObj.speed, nodeDwellTimes);
+                    if ~isempty(conflictInfo)
+                        continue;
+                    end
+
+                    taskObj.updateStatus('assigned');
+                    agvObj.assignTask(taskObj);
+                    agvObj.assignPath(executablePath);
+                    agvObj.setTimeWindows(reservedWindows);
+                    agvObj.updateState('moving');
+
+                    obj.timeWindowsGlobal = obj.timeWindowManager.timeWindows;
+                    obj.updatePriority(startTime);
+
+                    assignedPath = executablePath;
+                    assignedWindows = reservedWindows;
+                    success = true;
+                    return;
+                end
             end
         end
 
@@ -335,14 +369,34 @@ classdef SchedulerClass < handle
 
             libraryEntry = obj.findLibraryEntry(taskObj.id);
             if ~isempty(libraryEntry) && isfield(libraryEntry, 'paths') && ~isempty(libraryEntry.paths)
-                candidatePaths = libraryEntry.paths;
-                return;
+                candidatePaths = scheduler.SchedulerClass.filterPathsForTask(libraryEntry.paths, taskObj);
+                if ~isempty(candidatePaths)
+                    return;
+                end
             end
 
             sourceLabel = 'astar';
+            cacheKey = scheduler.SchedulerClass.generatedPathCacheKey(taskObj, agvObj.speed);
+            if isKey(obj.generatedPathCache, cacheKey)
+                candidatePaths = obj.generatedPathCache(cacheKey);
+                sourceLabel = 'astar-cache';
+                return;
+            end
+
+            candidatePaths = obj.generateOnDemandPaths(taskObj, agvObj, true);
+        end
+
+        function candidatePaths = generateOnDemandPaths(obj, taskObj, agvObj, shouldCache)
+            %GENERATEONDEMANDPATHS Generate fallback A* task routes.
+            candidatePaths = scheduler.SchedulerClass.emptyCandidatePathArray();
             generatedEntry = pathplan.PathLibrary.generateLibrary(obj.map, taskObj, 1, agvObj.speed, agvObj.id);
-            if isfield(generatedEntry, 'paths')
+            if isfield(generatedEntry, 'paths') && ~isempty(generatedEntry.paths)
                 candidatePaths = generatedEntry.paths;
+            end
+
+            if shouldCache && ~isempty(candidatePaths)
+                cacheKey = scheduler.SchedulerClass.generatedPathCacheKey(taskObj, agvObj.speed);
+                obj.generatedPathCache(cacheKey) = candidatePaths;
             end
         end
 
@@ -636,6 +690,24 @@ classdef SchedulerClass < handle
                     return;
                 end
             end
+        end
+
+        function candidatePaths = filterPathsForTask(candidatePaths, taskObj)
+            %FILTERPATHSFORTASK Keep only library routes matching task anchors.
+            if isempty(candidatePaths)
+                return;
+            end
+
+            keepMask = false(numel(candidatePaths), 1);
+            for i = 1:numel(candidatePaths)
+                keepMask(i) = scheduler.SchedulerClass.taskFitsPath(candidatePaths(i).nodes, taskObj);
+            end
+            candidatePaths = candidatePaths(keepMask);
+        end
+
+        function cacheKey = generatedPathCacheKey(taskObj, speed)
+            %GENERATEDPATHCACHEKEY Build a stable key for on-demand task routes.
+            cacheKey = sprintf('task:%d:speed:%0.6f', taskObj.id, double(speed));
         end
 
         function tasks = emptyTaskArray()

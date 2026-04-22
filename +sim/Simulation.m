@@ -49,12 +49,13 @@ classdef Simulation < handle
             end
 
             if nargin < 5 || isempty(schedulerObj)
-                pathLibraryData = [];
                 if isstruct(config) && isfield(config, 'pathLibraryData')
-                    pathLibraryData = config.pathLibraryData;
+                    schedulerObj = scheduler.SchedulerClass( ...
+                        mapObj, agvPool, taskList, config.pathLibraryData, timeWindowManager);
+                else
+                    schedulerObj = scheduler.SchedulerClass( ...
+                        mapObj, agvPool, taskList, scheduler.SchedulerClass.loadDefaultPathLibrary(), timeWindowManager);
                 end
-                schedulerObj = scheduler.SchedulerClass( ...
-                    mapObj, agvPool, taskList, pathLibraryData, timeWindowManager);
             end
 
             if nargin < 6 || isempty(visualizerObj)
@@ -114,12 +115,8 @@ classdef Simulation < handle
             %STEP Advance the simulation by one configured time step.
             dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
 
-            if obj.assignPendingTasks()
-                obj.conflictCheckRequired = true;
-            end
-            if obj.dispatchIdleReturns()
-                obj.conflictCheckRequired = true;
-            end
+            obj.assignPendingTasks();
+            obj.dispatchIdleReturns();
             if obj.conflictCheckRequired
                 obj.resolveActiveConflicts();
                 obj.conflictCheckRequired = false;
@@ -165,6 +162,7 @@ classdef Simulation < handle
                 end
 
                 rankedIdleIndices = obj.rankIdleAgvs(candidateAgvs, nextTask.start);
+                rankedIdleIndices = obj.limitAssignmentCandidates(rankedIdleIndices, nextTask.id);
                 success = false;
                 selectedAgv = [];
                 selectedIndex = 0;
@@ -220,6 +218,22 @@ classdef Simulation < handle
 
             score = distances + workloadPenalty;
             [~, rankedIndices] = sortrows([score(:), distances(:), workloads(:), ids(:)], [1, 2, 3, 4]);
+        end
+
+        function limitedIndices = limitAssignmentCandidates(obj, rankedIndices, taskId)
+            %LIMITASSIGNMENTCANDIDATES Keep only the top lightweight candidates.
+            if nargin >= 3 && isKey(obj.taskAssignmentRetryTimes, taskId)
+                limitedIndices = rankedIndices;
+                return;
+            end
+
+            maxCandidates = sim.Simulation.configValue(obj.config, 'maxAgvAssignmentCandidates', 5);
+            if isempty(maxCandidates) || maxCandidates <= 0 || numel(rankedIndices) <= maxCandidates
+                limitedIndices = rankedIndices;
+                return;
+            end
+
+            limitedIndices = rankedIndices(1:maxCandidates);
         end
 
         function didDispatch = dispatchIdleReturns(obj)

@@ -8,6 +8,10 @@ classdef TimeWindowManager < handle
         invalidatedWindows
         timeWindowIndex
         invalidatedWindowIndex
+        timeWindowIds
+        invalidatedWindowIds
+        agvWindowIds
+        nextWindowId
     end
 
     methods
@@ -17,6 +21,10 @@ classdef TimeWindowManager < handle
             obj.invalidatedWindows = timewindow.TimeWindowManager.emptyWindowArray();
             obj.timeWindowIndex = timewindow.TimeWindowManager.emptyWindowIndex();
             obj.invalidatedWindowIndex = timewindow.TimeWindowManager.emptyWindowIndex();
+            obj.timeWindowIds = zeros(0, 1);
+            obj.invalidatedWindowIds = zeros(0, 1);
+            obj.agvWindowIds = containers.Map('KeyType', 'double', 'ValueType', 'any');
+            obj.nextWindowId = 1;
         end
 
         function window = addTimeWindow(obj, edgeIndex, startTime, endTime, agvId, direction)
@@ -57,9 +65,12 @@ classdef TimeWindowManager < handle
             end
 
             windows = timewindow.TimeWindowManager.normalizeWindowArray(windows);
+            windowIds = obj.allocateWindowIds(numel(windows));
             obj.timeWindows = [obj.timeWindows; windows];
+            obj.timeWindowIds = [obj.timeWindowIds; windowIds];
             obj.timeWindowIndex = timewindow.TimeWindowManager.insertWindowsIntoIndex( ...
-                obj.timeWindowIndex, windows);
+                obj.timeWindowIndex, windows, windowIds);
+            obj.registerAgvWindowIds(windows, windowIds);
         end
 
         function addInvalidatedWindow(obj, windows)
@@ -69,9 +80,11 @@ classdef TimeWindowManager < handle
             end
 
             windows = timewindow.TimeWindowManager.normalizeWindowArray(windows);
+            windowIds = obj.allocateWindowIds(numel(windows));
             obj.invalidatedWindows = [obj.invalidatedWindows; windows];
+            obj.invalidatedWindowIds = [obj.invalidatedWindowIds; windowIds];
             obj.invalidatedWindowIndex = timewindow.TimeWindowManager.insertWindowsIntoIndex( ...
-                obj.invalidatedWindowIndex, windows);
+                obj.invalidatedWindowIndex, windows, windowIds);
         end
 
         function removeReservedWindow(obj, targetWindow)
@@ -90,15 +103,30 @@ classdef TimeWindowManager < handle
                 end
             end
             obj.timeWindows = obj.timeWindows(keepMask);
-            obj.refreshIndexes();
+            obj.timeWindowIds = obj.timeWindowIds(keepMask);
+            obj.refreshActiveIndex();
         end
 
         function refreshIndexes(obj)
             %REFRESHINDEXES Rebuild persistent indexes after bulk mutation.
+            obj.refreshActiveIndex();
+            obj.refreshInvalidatedIndex();
+        end
+
+        function refreshActiveIndex(obj)
+            %REFRESHACTIVEINDEX Rebuild active resource and AGV indexes.
             obj.timeWindows = timewindow.TimeWindowManager.normalizeWindowArray(obj.timeWindows);
+            obj.timeWindowIds = obj.ensureWindowIds(obj.timeWindowIds, numel(obj.timeWindows));
+            obj.timeWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows, obj.timeWindowIds);
+            obj.agvWindowIds = timewindow.TimeWindowManager.buildAgvWindowIndex(obj.timeWindows, obj.timeWindowIds);
+        end
+
+        function refreshInvalidatedIndex(obj)
+            %REFRESHINVALIDATEDINDEX Rebuild blocked-window resource indexes.
             obj.invalidatedWindows = timewindow.TimeWindowManager.normalizeWindowArray(obj.invalidatedWindows);
-            obj.timeWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows);
-            obj.invalidatedWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.invalidatedWindows);
+            obj.invalidatedWindowIds = obj.ensureWindowIds(obj.invalidatedWindowIds, numel(obj.invalidatedWindows));
+            obj.invalidatedWindowIndex = timewindow.TimeWindowManager.buildWindowIndex( ...
+                obj.invalidatedWindows, obj.invalidatedWindowIds);
         end
 
         function [hasConflict, conflictInfo] = detectConflict(obj, newWindow, existingWindows, existingIndex)
@@ -351,11 +379,12 @@ classdef TimeWindowManager < handle
             end
 
             obj.timeWindows = obj.timeWindows(keepMask);
-            obj.timeWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows);
+            obj.timeWindowIds = obj.timeWindowIds(keepMask);
+            obj.refreshActiveIndex();
             if ~isempty(invalidated)
                 obj.addInvalidatedWindow(invalidated);
             else
-                obj.invalidatedWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.invalidatedWindows);
+                obj.refreshInvalidatedIndex();
             end
         end
 
@@ -372,13 +401,10 @@ classdef TimeWindowManager < handle
             keepMask = true(numel(obj.timeWindows), 1);
 
             if nargin < 3 || isempty(path)
-                for i = 1:numel(obj.timeWindows)
-                    if obj.timeWindows(i).agvId == agvId
-                        keepMask(i) = false;
-                    end
-                end
+                keepMask = obj.keepMaskWithoutAgv(agvId);
                 obj.timeWindows = obj.timeWindows(keepMask);
-                obj.refreshIndexes();
+                obj.timeWindowIds = obj.timeWindowIds(keepMask);
+                obj.refreshActiveIndex();
                 return;
             end
 
@@ -387,22 +413,75 @@ classdef TimeWindowManager < handle
             releaseKeySet = timewindow.TimeWindowManager.edgeKeySet(releaseEdges, false);
             releaseNodeSet = timewindow.TimeWindowManager.nodeKeySet(path);
 
-            for i = 1:numel(obj.timeWindows)
-                if obj.timeWindows(i).agvId ~= agvId
-                    continue;
-                end
+            candidateIndices = obj.windowIndicesForAgv(agvId);
+            for j = 1:numel(candidateIndices)
+                i = candidateIndices(j);
                 if timewindow.TimeWindowManager.windowMatchesPath(obj.timeWindows(i), releaseKeySet, releaseNodeSet)
                     keepMask(i) = false;
                 end
             end
 
             obj.timeWindows = obj.timeWindows(keepMask);
-            obj.refreshIndexes();
+            obj.timeWindowIds = obj.timeWindowIds(keepMask);
+            obj.refreshActiveIndex();
         end
 
         function windows = getAllWindows(obj)
             %GETALLWINDOWS Return both reserved and invalidated windows.
             windows = [obj.timeWindows; obj.invalidatedWindows];
+        end
+
+        function windowIds = allocateWindowIds(obj, count)
+            %ALLOCATEWINDOWIDS Return unique identifiers for new windows.
+            windowIds = (obj.nextWindowId:(obj.nextWindowId + count - 1)).';
+            obj.nextWindowId = obj.nextWindowId + count;
+        end
+
+        function windowIds = ensureWindowIds(obj, windowIds, count)
+            %ENSUREWINDOWIDS Recreate ids after tests or callers edit arrays directly.
+            if numel(windowIds) == count
+                windowIds = double(windowIds(:));
+                return;
+            end
+
+            windowIds = obj.allocateWindowIds(count);
+        end
+
+        function registerAgvWindowIds(obj, windows, windowIds)
+            %REGISTERAGVWINDOWIDS Maintain a quick AGV-to-window-id lookup.
+            for i = 1:numel(windows)
+                agvId = windows(i).agvId;
+                if agvId <= 0
+                    continue;
+                end
+                if isKey(obj.agvWindowIds, agvId)
+                    ids = obj.agvWindowIds(agvId);
+                    ids(end + 1, 1) = windowIds(i); %#ok<AGROW>
+                else
+                    ids = windowIds(i);
+                end
+                obj.agvWindowIds(agvId) = ids;
+            end
+        end
+
+        function keepMask = keepMaskWithoutAgv(obj, agvId)
+            %KEEPMASKWITHOUTAGV Build a release mask using the AGV index.
+            keepMask = true(numel(obj.timeWindows), 1);
+            if ~isKey(obj.agvWindowIds, agvId)
+                return;
+            end
+            keepMask(ismember(obj.timeWindowIds, obj.agvWindowIds(agvId))) = false;
+        end
+
+        function indices = windowIndicesForAgv(obj, agvId)
+            %WINDOWINDICESFORAGV Return active window indices for one AGV.
+            if ~isKey(obj.agvWindowIds, agvId)
+                indices = zeros(0, 1);
+                return;
+            end
+
+            [~, indices] = ismember(obj.agvWindowIds(agvId), obj.timeWindowIds);
+            indices = indices(indices > 0);
         end
     end
 
@@ -559,45 +638,56 @@ classdef TimeWindowManager < handle
             windows = normalized;
         end
 
-        function indexMap = buildWindowIndex(windows)
+        function indexMap = buildWindowIndex(windows, windowIds)
             %BUILDWINDOWINDEX Group edge/node windows by resource and sort by time.
+            if nargin < 2 || isempty(windowIds)
+                windowIds = zeros(numel(windows), 1);
+            end
             indexMap = timewindow.TimeWindowManager.emptyWindowIndex();
             for i = 1:numel(windows)
                 window = timewindow.TimeWindowManager.normalizeWindow(windows(i));
                 key = timewindow.TimeWindowManager.getWindowResourceKey(window);
                 if isKey(indexMap, key)
-                    indexedWindows = indexMap(key);
-                    indexedWindows(end + 1, 1) = window; %#ok<AGROW>
+                    indexedRows = indexMap(key);
+                    indexedRows(end + 1, :) = timewindow.TimeWindowManager.windowToIndexRow(window, windowIds(i)); %#ok<AGROW>
                 else
-                    indexedWindows = window;
+                    indexedRows = timewindow.TimeWindowManager.windowToIndexRow(window, windowIds(i));
                 end
-                indexMap(key) = indexedWindows;
+                indexMap(key) = indexedRows;
             end
 
             keyList = indexMap.keys;
             for i = 1:numel(keyList)
-                indexMap(keyList{i}) = timewindow.TimeWindowManager.sortWindowsByTime(indexMap(keyList{i}));
+                indexMap(keyList{i}) = timewindow.TimeWindowManager.sortIndexRowsByTime(indexMap(keyList{i}));
             end
         end
 
-        function indexMap = insertWindowIntoIndex(indexMap, window)
+        function indexMap = insertWindowIntoIndex(indexMap, window, windowId)
             %INSERTWINDOWINTOINDEX Insert one normalized window into an index.
+            if nargin < 3 || isempty(windowId)
+                windowId = 0;
+            end
             window = timewindow.TimeWindowManager.normalizeWindow(window);
             key = timewindow.TimeWindowManager.getWindowResourceKey(window);
+            newRow = timewindow.TimeWindowManager.windowToIndexRow(window, windowId);
             if isKey(indexMap, key)
-                indexedWindows = indexMap(key);
-                indexedWindows(end + 1, 1) = window; %#ok<AGROW>
+                indexedRows = indexMap(key);
+                insertAt = timewindow.TimeWindowManager.findInsertionIndex(indexedRows, newRow);
+                indexedRows = [indexedRows(1:insertAt - 1, :); newRow; indexedRows(insertAt:end, :)];
             else
-                indexedWindows = window;
+                indexedRows = newRow;
             end
 
-            indexMap(key) = timewindow.TimeWindowManager.sortWindowsByTime(indexedWindows);
+            indexMap(key) = indexedRows;
         end
 
-        function indexMap = insertWindowsIntoIndex(indexMap, windows)
+        function indexMap = insertWindowsIntoIndex(indexMap, windows, windowIds)
             %INSERTWINDOWSINTOINDEX Insert multiple windows into an index.
+            if nargin < 3 || isempty(windowIds)
+                windowIds = zeros(numel(windows), 1);
+            end
             for i = 1:numel(windows)
-                indexMap = timewindow.TimeWindowManager.insertWindowIntoIndex(indexMap, windows(i));
+                indexMap = timewindow.TimeWindowManager.insertWindowIntoIndex(indexMap, windows(i), windowIds(i));
             end
         end
 
@@ -615,21 +705,21 @@ classdef TimeWindowManager < handle
                 return;
             end
 
-            indexedWindows = indexMap(key);
-            for i = 1:numel(indexedWindows)
-                existing = indexedWindows(i);
-                if existing.startTime >= newWindow.endTime
+            indexedRows = indexMap(key);
+            for i = 1:size(indexedRows, 1)
+                existingRow = indexedRows(i, :);
+                if existingRow(1) >= newWindow.endTime
                     break;
                 end
-                if existing.endTime <= newWindow.startTime
+                if existingRow(2) <= newWindow.startTime
                     continue;
                 end
-                if existing.agvId > 0 && existing.agvId == newWindow.agvId
+                if existingRow(3) > 0 && existingRow(3) == newWindow.agvId
                     continue;
                 end
 
                 hasConflict = true;
-                existingWindow = existing;
+                existingWindow = timewindow.TimeWindowManager.indexRowToWindow(existingRow);
                 return;
             end
         end
@@ -643,6 +733,90 @@ classdef TimeWindowManager < handle
             sortMatrix = [[windows.startTime].', [windows.endTime].', [windows.agvId].'];
             [~, order] = sortrows(sortMatrix, [1, 2, 3]);
             windows = windows(order);
+        end
+
+        function rows = sortIndexRowsByTime(rows)
+            %SORTINDEXROWSBYTIME Sort numeric index rows by timing and owner.
+            if size(rows, 1) <= 1
+                return;
+            end
+
+            [~, order] = sortrows(rows(:, [1, 2, 3]), [1, 2, 3]);
+            rows = rows(order, :);
+        end
+
+        function insertAt = findInsertionIndex(rows, newRow)
+            %FINDINSERTIONINDEX Locate the sorted insertion point for a row.
+            low = 1;
+            high = size(rows, 1) + 1;
+            while low < high
+                mid = floor((low + high) / 2);
+                if timewindow.TimeWindowManager.indexRowLessOrEqual(rows(mid, :), newRow)
+                    low = mid + 1;
+                else
+                    high = mid;
+                end
+            end
+            insertAt = low;
+        end
+
+        function tf = indexRowLessOrEqual(rowA, rowB)
+            %INDEXROWLESSOREQUAL Compare rows by start, end, then AGV id.
+            if rowA(1) ~= rowB(1)
+                tf = rowA(1) <= rowB(1);
+            elseif rowA(2) ~= rowB(2)
+                tf = rowA(2) <= rowB(2);
+            else
+                tf = rowA(3) <= rowB(3);
+            end
+        end
+
+        function row = windowToIndexRow(window, windowId)
+            %WINDOWTOINDEXROW Convert a window struct to a compact numeric row.
+            window = timewindow.TimeWindowManager.normalizeWindow(window);
+            if strcmp(window.windowType, 'node')
+                typeCode = 1;
+            else
+                typeCode = 0;
+            end
+            row = [ ...
+                window.startTime, ...
+                window.endTime, ...
+                window.agvId, ...
+                window.direction, ...
+                typeCode, ...
+                window.edgeIndex, ...
+                window.nodeIndex, ...
+                double(windowId)];
+        end
+
+        function window = indexRowToWindow(row)
+            %INDEXROWTOWINDOW Convert a numeric index row back to a window struct.
+            if row(5) == 1
+                window = timewindow.TimeWindowManager.buildNodeWindow( ...
+                    row(10:11), row(1), row(2), row(3));
+            else
+                window = timewindow.TimeWindowManager.buildWindow( ...
+                    row(6:9), row(1), row(2), row(3), row(4));
+            end
+        end
+
+        function indexMap = buildAgvWindowIndex(windows, windowIds)
+            %BUILDAGVWINDOWINDEX Map AGV id to active window ids.
+            indexMap = containers.Map('KeyType', 'double', 'ValueType', 'any');
+            for i = 1:numel(windows)
+                agvId = windows(i).agvId;
+                if agvId <= 0
+                    continue;
+                end
+                if isKey(indexMap, agvId)
+                    ids = indexMap(agvId);
+                    ids(end + 1, 1) = windowIds(i); %#ok<AGROW>
+                else
+                    ids = windowIds(i);
+                end
+                indexMap(agvId) = ids;
+            end
         end
 
         function key = getDirectedEdgeKey(edgeIndex)

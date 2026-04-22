@@ -10,8 +10,11 @@ if ~exist(dataDir, 'dir')
     mkdir(dataDir);
 end
 
+inputTaskPath = fullfile(projectRoot, 'input', 'task_list.json');
 taskPath = fullfile(dataDir, 'task_list.mat');
-if ~isfile(taskPath)
+if isfile(inputTaskPath)
+    taskPath = inputTaskPath;
+elseif ~isfile(taskPath)
     createTaskList();
 end
 

@@ -13,7 +13,8 @@ end
 warehouseMap = map.MapClass.createDefaultMap();
 agvPool = agv.AGVClass.createDefaultPool();
 tasks = task.TaskParser(fullfile(dataDir, 'task_list.mat'));
-schedulerObj = scheduler.SchedulerClass(warehouseMap, agvPool, tasks);
+pathLibraryData = pathplan.PathLibrary.generateForTasks(warehouseMap, tasks, 3, 1.0);
+schedulerObj = scheduler.SchedulerClass(warehouseMap, agvPool, tasks, pathLibraryData);
 
 orderedTasks = schedulerObj.updatePriority(50.0);
 assert(orderedTasks(1).id == 1, 'Earliest request time should rank first when priorities tie.');

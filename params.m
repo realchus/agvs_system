@@ -12,6 +12,7 @@ config.enableHeadlessMode = false;
 config.enableVisualization = ~config.enableHeadlessMode;
 config.visualizerVisible = ~config.enableHeadlessMode;
 config.visualizationRefreshInterval = 1.0;
+config.maxAgvAssignmentCandidates = 8;
 config.returnToParkingWhenIdle = true;
 config.waitTimeout = 5.0;
 config.dynamicObstacleSchedule = repmat(struct( ...

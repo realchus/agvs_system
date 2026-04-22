@@ -41,7 +41,13 @@ assert(isequal(batchLibrary(2).paths(1).nodes(1, :), tasks(2).start), ...
 createPathLibrary();
 loadedData = load(fullfile(dataDir, 'path_library.mat'));
 assert(isfield(loadedData, 'pathLibraryData'), 'Saved path library MAT file is missing pathLibraryData.');
-assert(numel(loadedData.pathLibraryData) == numel(tasks), 'Saved path library should include every task.');
+inputTaskFile = fullfile(projectRoot, 'input', 'task_list.json');
+if isfile(inputTaskFile)
+    savedTasks = task.TaskParser(inputTaskFile);
+else
+    savedTasks = tasks;
+end
+assert(numel(loadedData.pathLibraryData) == numel(savedTasks), 'Saved path library should include every default task.');
 
 disp('test_pathlibrary passed');
 end
