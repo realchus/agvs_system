@@ -22,8 +22,11 @@ assert(numel(simulation.agvPool) == 10, 'Scenario should load ten AGVs from inpu
 assert(numel(simulation.taskList) == 30, 'Scenario should load thirty tasks from input/task_list.json.');
 assert(report.completedTaskCount == 30, 'All thirty tasks should complete in the scenario test.');
 assert(report.collisionCount == 0, 'Scenario should not contain collisions.');
+assert(report.taskAssignmentFailureCount == 0, 'Scenario should not contain assignment failures.');
 assert(numel(report.taskCompletionTimes) == 30, 'Scenario report should include all task completion times.');
 assert(numel(report.agvDistances) == 10, 'Scenario report should include all AGV travel distances.');
+assert(sum([report.agvDistances.distance] > 0) == 10, ...
+    'Balanced dispatch should keep all AGVs active in the 30-task scenario.');
 assert(all(strcmp({simulation.taskList.status}, 'completed')), 'All tasks should finish with completed status.');
 assert(sim.Simulation.countEvents(results.eventLog, 'task_assigned') == 30, ...
     'All thirty tasks should be assigned during the scenario.');

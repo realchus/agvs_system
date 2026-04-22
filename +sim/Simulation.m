@@ -156,13 +156,28 @@ classdef Simulation < handle
                     return;
                 end
 
-                [selectedAgv, selectedIndex] = obj.selectNearestIdleAgv(idleAgvs, nextTask.start);
+                rankedIdleIndices = obj.rankIdleAgvs(idleAgvs, nextTask.start);
+                success = false;
+                selectedAgv = [];
+                selectedIndex = 0;
+                assignedPath = zeros(0, 2);
+                sourceLabel = '';
+
                 obj.map.registerTaskTarget(nextTask.id, [nextTask.start; nextTask.getWaypointPositions()]);
-                [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(selectedAgv, nextTask, obj.currentTime);
+                for candidateIdx = 1:numel(rankedIdleIndices)
+                    selectedIndex = rankedIdleIndices(candidateIdx);
+                    selectedAgv = idleAgvs(selectedIndex);
+                    [success, assignedPath, ~, sourceLabel] = obj.scheduler.assignToAGV(selectedAgv, nextTask, obj.currentTime);
+                    if success
+                        break;
+                    end
+                end
+
                 if ~success
-                    obj.logEvent('task_assignment_failed', selectedAgv.id, nextTask.id, 'No feasible route could be reserved.');
-                    idleAgvs(selectedIndex) = [];
-                    continue;
+                    obj.logEvent('task_assignment_failed', 0, nextTask.id, ...
+                        'No idle AGV could reserve a feasible route.');
+                    obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
+                    return;
                 end
 
                 nextTask.updateStatus('executing');
@@ -178,11 +193,21 @@ classdef Simulation < handle
             obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
         end
 
-        function [selectedAgv, selectedIndex] = selectNearestIdleAgv(~, idleAgvs, targetPosition)
-            %SELECTNEARESTIDLEAGV Pick the idle AGV closest to the task start.
+        function rankedIndices = rankIdleAgvs(obj, idleAgvs, targetPosition)
+            %RANKIDLEAGVS Rank idle AGVs by travel distance and workload balance.
             distances = arrayfun(@(a) sum(abs(round(a.position) - targetPosition)), idleAgvs);
-            [~, selectedIndex] = min(distances);
-            selectedAgv = idleAgvs(selectedIndex);
+            workloads = arrayfun(@(a) obj.travelDistanceFor(a.id), idleAgvs);
+            ids = arrayfun(@(a) a.id, idleAgvs);
+
+            balanceWeight = sim.Simulation.configValue(obj.config, 'agvUtilizationBalanceWeight', 20.0);
+            if max(workloads) > eps
+                workloadPenalty = balanceWeight .* workloads ./ max(workloads);
+            else
+                workloadPenalty = zeros(size(workloads));
+            end
+
+            score = distances + workloadPenalty;
+            [~, rankedIndices] = sortrows([score(:), distances(:), workloads(:), ids(:)], [1, 2, 3, 4]);
         end
 
         function didDispatch = dispatchIdleReturns(obj)
@@ -571,6 +596,15 @@ classdef Simulation < handle
 
             obj.agvTravelDistance(agvId) = obj.agvTravelDistance(agvId) + ...
                 norm(double(currentPosition) - double(previousPosition));
+        end
+
+        function distance = travelDistanceFor(obj, agvId)
+            %TRAVELDISTANCEFOR Return accumulated travel distance for one AGV.
+            if isKey(obj.agvTravelDistance, agvId)
+                distance = obj.agvTravelDistance(agvId);
+            else
+                distance = 0.0;
+            end
         end
 
         function metrics = buildMetrics(obj)

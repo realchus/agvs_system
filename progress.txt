@@ -428,3 +428,24 @@
 
 - 相比原 input 串行节奏下约 `3560s` 的仿真完成时间，新节奏约降低到 `1766s`，更接近入库与出库并行发生的工程场景。
 - 当前调度仍存在车辆利用率不均衡：部分中间车位 AGV 行驶距离为 `0`，右侧 AGV 承担较多任务，后续若面向工程应用建议增加负载均衡或任务分区策略。
+
+## [2026-04-22] - Task: 优化调度策略提高 AGV 利用率
+
+### What was done:
+
+- 优化 `+sim/Simulation.m` 的空闲 AGV 选择策略，从单纯选择最近车辆改为按“到任务起点距离 + 已累计行驶工作量惩罚”综合评分。
+- 调度器为同一任务按评分顺序尝试多个空闲 AGV；若某台车因时间窗无法预留路径，会继续尝试下一台空闲车，只有所有候选车都失败时才记录任务分配失败。
+- 新增可选配置 `agvUtilizationBalanceWeight`，默认值为 `20.0`，用于控制利用率均衡对派车评分的影响。
+- 更新 `tests/test_scenario.m`，要求默认 10 AGV / 30 任务场景中 10 台 AGV 全部参与运行，并且没有任务分配失败。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过；30 个任务全部完成，完成时间 `1766s`，碰撞次数 `0`，任务分配失败次数 `0`，10 台 AGV 均有行驶距离。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_performance"`，结果通过；单次 wall-clock 耗时约 `11.33s`。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过；最终性能测试 wall-clock 耗时约 `8.46s`。
+
+### Notes:
+
+- 优化前默认场景约 6 台 AGV 参与运行；优化后 10 台 AGV 全部参与运行。
+- 优化后默认场景总完成时间保持 `1766s`，没有引入额外碰撞、重规划或任务分配失败。
