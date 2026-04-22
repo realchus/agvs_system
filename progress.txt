@@ -409,3 +409,22 @@
 
 - 相比优化前 `47.74s` 的性能基准，本次优化后完整默认场景性能测试约提升到 `8.84s`。
 - 默认 10 AGV / 30 任务场景保持完成时间 `3560s`，完成任务数 `30`，碰撞次数 `0`。
+
+## [2026-04-22] - Task: 调整 input 任务请求时间为工程化成对释放
+
+### What was done:
+
+- 调整 `input/task_list.json` 中 30 个任务的 `requestTime`，将原先 30 单按 `120s` 串行释放改为出库任务 1..15 与入库任务 16..30 成对释放。
+- 新节奏为每 `120s` 一个小批次，每批包含 1 个货架到左侧拣货窗口任务和 1 个右侧上货窗口到货架任务，整体平均约每 `60s` 释放 1 个任务。
+- 更新 `tests/test_task.m`，验证 input 任务使用新的成对释放节奏。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过；30 个任务全部完成，完成时间 `1766s`，碰撞次数 `0`，重规划次数 `0`，任务分配失败次数 `0`。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_performance"`，结果通过；单次 wall-clock 耗时约 `10.51s`。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过；最终性能测试 wall-clock 耗时约 `8.51s`。
+
+### Notes:
+
+- 相比原 input 串行节奏下约 `3560s` 的仿真完成时间，新节奏约降低到 `1766s`，更接近入库与出库并行发生的工程场景。
+- 当前调度仍存在车辆利用率不均衡：部分中间车位 AGV 行驶距离为 `0`，右侧 AGV 承担较多任务，后续若面向工程应用建议增加负载均衡或任务分区策略。

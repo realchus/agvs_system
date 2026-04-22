@@ -124,7 +124,7 @@
     "start": [2, 45],
     "waypoints": [{"name": "货架16", "position": [13, 35]}],
     "priority": 1,
-    "requestTime": 1800,
+    "requestTime": 0,
     "status": "pending"
   },
   {
@@ -132,7 +132,7 @@
     "start": [2, 48],
     "waypoints": [{"name": "货架17", "position": [13, 45]}],
     "priority": 1,
-    "requestTime": 1920,
+    "requestTime": 120,
     "status": "pending"
   },
   {
@@ -140,7 +140,7 @@
     "start": [2, 51],
     "waypoints": [{"name": "货架18", "position": [13, 55]}],
     "priority": 1,
-    "requestTime": 2040,
+    "requestTime": 240,
     "status": "pending"
   },
   {
@@ -148,7 +148,7 @@
     "start": [2, 54],
     "waypoints": [{"name": "货架19", "position": [17, 5]}],
     "priority": 1,
-    "requestTime": 2160,
+    "requestTime": 360,
     "status": "pending"
   },
   {
@@ -156,7 +156,7 @@
     "start": [2, 57],
     "waypoints": [{"name": "货架20", "position": [17, 15]}],
     "priority": 1,
-    "requestTime": 2280,
+    "requestTime": 480,
     "status": "pending"
   },
   {
@@ -164,7 +164,7 @@
     "start": [2, 60],
     "waypoints": [{"name": "货架21", "position": [17, 25]}],
     "priority": 1,
-    "requestTime": 2400,
+    "requestTime": 600,
     "status": "pending"
   },
   {
@@ -172,7 +172,7 @@
     "start": [2, 46],
     "waypoints": [{"name": "货架22", "position": [17, 35]}],
     "priority": 1,
-    "requestTime": 2520,
+    "requestTime": 720,
     "status": "pending"
   },
   {
@@ -180,7 +180,7 @@
     "start": [2, 49],
     "waypoints": [{"name": "货架23", "position": [17, 45]}],
     "priority": 1,
-    "requestTime": 2640,
+    "requestTime": 840,
     "status": "pending"
   },
   {
@@ -188,7 +188,7 @@
     "start": [2, 52],
     "waypoints": [{"name": "货架24", "position": [17, 55]}],
     "priority": 1,
-    "requestTime": 2760,
+    "requestTime": 960,
     "status": "pending"
   },
   {
@@ -196,7 +196,7 @@
     "start": [2, 55],
     "waypoints": [{"name": "货架25", "position": [21, 5]}],
     "priority": 1,
-    "requestTime": 2880,
+    "requestTime": 1080,
     "status": "pending"
   },
   {
@@ -204,7 +204,7 @@
     "start": [2, 58],
     "waypoints": [{"name": "货架26", "position": [21, 15]}],
     "priority": 1,
-    "requestTime": 3000,
+    "requestTime": 1200,
     "status": "pending"
   },
   {
@@ -212,7 +212,7 @@
     "start": [2, 61],
     "waypoints": [{"name": "货架27", "position": [21, 25]}],
     "priority": 1,
-    "requestTime": 3120,
+    "requestTime": 1320,
     "status": "pending"
   },
   {
@@ -220,7 +220,7 @@
     "start": [2, 47],
     "waypoints": [{"name": "货架28", "position": [21, 35]}],
     "priority": 1,
-    "requestTime": 3240,
+    "requestTime": 1440,
     "status": "pending"
   },
   {
@@ -228,7 +228,7 @@
     "start": [2, 50],
     "waypoints": [{"name": "货架29", "position": [21, 45]}],
     "priority": 1,
-    "requestTime": 3360,
+    "requestTime": 1560,
     "status": "pending"
   },
   {
@@ -236,7 +236,7 @@
     "start": [2, 53],
     "waypoints": [{"name": "货架30", "position": [21, 55]}],
     "priority": 1,
-    "requestTime": 3480,
+    "requestTime": 1680,
     "status": "pending"
   }
 ]
