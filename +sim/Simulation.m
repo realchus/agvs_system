@@ -18,6 +18,7 @@ classdef Simulation < handle
         agvTravelDistance
         taskCompletionTimes
         conflictCheckRequired
+        parkingPositions
     end
 
     methods
@@ -71,9 +72,11 @@ classdef Simulation < handle
             obj.agvTravelDistance = containers.Map('KeyType', 'double', 'ValueType', 'double');
             obj.taskCompletionTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
             obj.conflictCheckRequired = true;
+            obj.parkingPositions = containers.Map('KeyType', 'double', 'ValueType', 'any');
 
             for i = 1:numel(obj.agvPool)
                 obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
+                obj.parkingPositions(obj.agvPool(i).id) = round(double(obj.agvPool(i).position(:))');
             end
 
             obj.syncMapOccupancy();
@@ -85,7 +88,7 @@ classdef Simulation < handle
             obj.logEvent('simulation_started', 0, 0, 'Simulation started.');
 
             totalTime = sim.Simulation.configValue(obj.config, 'totalTime', 120.0);
-            while obj.currentTime < totalTime && ~obj.allTasksCompleted()
+            while obj.currentTime < totalTime && ~obj.isSimulationComplete()
                 obj.step();
             end
 
@@ -102,6 +105,9 @@ classdef Simulation < handle
             dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
 
             if obj.assignPendingTasks()
+                obj.conflictCheckRequired = true;
+            end
+            if obj.dispatchIdleReturns()
                 obj.conflictCheckRequired = true;
             end
             if obj.conflictCheckRequired
@@ -163,6 +169,47 @@ classdef Simulation < handle
             distances = arrayfun(@(a) sum(abs(round(a.position) - targetPosition)), idleAgvs);
             [~, selectedIndex] = min(distances);
             selectedAgv = idleAgvs(selectedIndex);
+        end
+
+        function didDispatch = dispatchIdleReturns(obj)
+            %DISPATCHIDLERETURNS Send idle AGVs back to their parking cells.
+            didDispatch = false;
+            if ~sim.Simulation.configValue(obj.config, 'returnToParkingWhenIdle', true)
+                return;
+            end
+
+            for i = 1:numel(obj.agvPool)
+                agvObj = obj.agvPool(i);
+                if ~isempty(agvObj.currentTask) || ~strcmp(agvObj.state, 'idle') || ~isempty(agvObj.path)
+                    continue;
+                end
+                if obj.isAgvParked(agvObj)
+                    continue;
+                end
+
+                parkingPosition = obj.parkingPositionFor(agvObj);
+                currentPosition = round(double(agvObj.position(:))');
+                returnTargetId = -agvObj.id;
+                obj.map.registerTaskTarget(returnTargetId, [currentPosition; parkingPosition]);
+                returnPath = pathplan.AStar(obj.map, currentPosition, parkingPosition, agvObj.id, returnTargetId);
+                if isempty(returnPath)
+                    obj.logEvent('parking_return_failed', agvObj.id, 0, 'No feasible route to parking point.');
+                    continue;
+                end
+
+                [returnWindows, conflictInfo] = obj.timeWindowManager.reservePath( ...
+                    agvObj.id, returnPath, obj.currentTime, agvObj.speed);
+                if ~isempty(conflictInfo)
+                    obj.logEvent('parking_return_failed', agvObj.id, 0, 'Parking route reservation conflicted.');
+                    continue;
+                end
+
+                agvObj.assignPath(returnPath);
+                agvObj.setTimeWindows(returnWindows);
+                agvObj.updateState('returning');
+                didDispatch = true;
+                obj.logEvent('parking_return_started', agvObj.id, 0, 'AGV returning to parking point.');
+            end
         end
 
         function nextTask = findAssignableTask(obj, orderedTasks)
@@ -227,6 +274,18 @@ classdef Simulation < handle
                 if completed
                     obj.completeTask(agvObj);
                 end
+                return;
+            end
+
+            if isempty(agvObj.currentTask) && strcmp(agvObj.state, 'returning')
+                [~, ~, moveInfo] = agvObj.move(dt);
+                if strcmp(agvObj.state, 'idle') && obj.isAgvParked(agvObj)
+                    obj.timeWindowManager.releasePath(agvObj.id);
+                    agvObj.setTimeWindows(timewindow.TimeWindowManager.emptyWindowArray());
+                    obj.map.clearTaskTarget(-agvObj.id);
+                    obj.logEvent('parking_return_completed', agvObj.id, 0, 'AGV reached parking point.');
+                end
+                obj.recordTravelDistance(agvObj.id, previousPosition, agvObj.position);
                 return;
             end
 
@@ -416,6 +475,47 @@ classdef Simulation < handle
         function tf = allTasksCompleted(obj)
             %ALLTASKSCOMPLETED Return true when every task is marked completed.
             tf = all(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
+        end
+
+        function tf = isSimulationComplete(obj)
+            %ISSIMULATIONCOMPLETE Include optional post-task return-to-parking.
+            if ~obj.allTasksCompleted()
+                tf = false;
+                return;
+            end
+
+            if ~sim.Simulation.configValue(obj.config, 'returnToParkingWhenIdle', true)
+                tf = true;
+                return;
+            end
+
+            tf = obj.allAgvsParked();
+        end
+
+        function tf = allAgvsParked(obj)
+            %ALLAGVSPARKED Return true when every AGV is idle at its parking cell.
+            tf = true;
+            for i = 1:numel(obj.agvPool)
+                agvObj = obj.agvPool(i);
+                if ~isempty(agvObj.currentTask) || ~strcmp(agvObj.state, 'idle') || ~obj.isAgvParked(agvObj)
+                    tf = false;
+                    return;
+                end
+            end
+        end
+
+        function tf = isAgvParked(obj, agvObj)
+            %ISAGVPARKED Compare current position with the stored parking point.
+            tf = isequal(round(double(agvObj.position(:))'), obj.parkingPositionFor(agvObj));
+        end
+
+        function parkingPosition = parkingPositionFor(obj, agvObj)
+            %PARKINGPOSITIONFOR Return the AGV's initial parking coordinate.
+            if isKey(obj.parkingPositions, agvObj.id)
+                parkingPosition = obj.parkingPositions(agvObj.id);
+            else
+                parkingPosition = round(double(agvObj.position(:))');
+            end
         end
 
         function logEvent(obj, type, agvId, taskId, message)

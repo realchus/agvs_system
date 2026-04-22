@@ -32,10 +32,14 @@ results = simulation.run();
 assert(strcmp(taskObj.status, 'completed'), 'Simulation should complete the pending task.');
 assert(isempty(vehicle.currentTask), 'AGV should release the task after completion.');
 assert(strcmp(vehicle.state, 'idle'), 'AGV should return to idle when the task is done.');
+assert(isequal(round(vehicle.position), [2, 1]), 'Idle AGV should return to its parking point after task completion.');
 assert(results.completedTaskCount == 1, 'Completed task count should be reported correctly.');
 assert(any(strcmp({simulation.eventLog.type}, 'task_assigned')), 'Event log should include task assignment.');
 assert(any(strcmp({simulation.eventLog.type}, 'loading_started')), 'Event log should include loading.');
+assert(any(strcmp({simulation.eventLog.type}, 'loading_completed')), 'Event log should include load completion after the 5s service time.');
+assert(any(strcmp({simulation.eventLog.type}, 'unloading_started')), 'Event log should include unloading.');
 assert(any(strcmp({simulation.eventLog.type}, 'task_completed')), 'Event log should include task completion.');
+assert(any(strcmp({simulation.eventLog.type}, 'parking_return_completed')), 'Event log should include parking return completion.');
 end
 
 function testConflictResolutionInsideStep()

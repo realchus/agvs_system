@@ -27,6 +27,13 @@ assert(numel(report.agvDistances) == 10, 'Scenario report should include all AGV
 assert(all(strcmp({simulation.taskList.status}, 'completed')), 'All tasks should finish with completed status.');
 assert(sim.Simulation.countEvents(results.eventLog, 'task_assigned') == 30, ...
     'All thirty tasks should be assigned during the scenario.');
+assert(sim.Simulation.countEvents(results.eventLog, 'parking_return_completed') >= 1, ...
+    'Scenario should log AGV return-to-parking completion.');
+finalPositions = reshape([simulation.agvPool.position], 2, []).';
+inputAgvPool = agv.AGVClass.loadPool(fullfile(projectRoot, 'input', 'agv_pool.json'));
+expectedParking = reshape([inputAgvPool.position], 2, []).';
+assert(isequal(round(finalPositions), expectedParking), ...
+    'All AGVs should return to their input parking positions after the scenario.');
 
 disp('Scenario report:');
 disp(struct( ...

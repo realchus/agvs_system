@@ -317,3 +317,27 @@
 
 - 当前 input 场景采用保守的 `120s` 任务释放间隔，便于作为稳定基准；用户可缩短 `requestTime` 做更激进的拥堵压测。
 - 当前时间窗模型主要约束边冲突，尚未引入完整节点占用时间窗；密集释放任务时仍建议观察 `collisionCount` 和事件日志。
+
+## [2026-04-22] - Task: 空闲返航与 main 可视化开关
+
+### What was done:
+
+- 在 `sim.Simulation` 中记录每台 AGV 初始化位置作为停靠点。
+- 新增空闲返航逻辑：AGV 完成任务且没有接到新任务时，会规划并预留“当前位置 -> 停靠点”的返航路径。
+- 调整仿真结束条件：启用返航时，任务全完成后会继续运行到所有 AGV 回到各自停靠点。
+- 修正 `agv.AGVClass.move()`，使 AGV 沿返航路径移动时保持 `returning` 状态，直到路径完成后回到 `idle`。
+- 在 `params.m` 中新增 `mainEnableVisualization` 和 `returnToParkingWhenIdle`，`main.m` 会按 `mainEnableVisualization` 决定运行时是否显示可视化。
+- 检查装卸货时间：AGV 默认 `loadDuration=5s`、`unloadDuration=5s`，测试中已验证装货完成事件在 5s 服务后出现。
+- 更新 `tests/test_simulation.m` 和 `tests/test_scenario.m`，覆盖单任务返航和 10 AGV / 30 任务结束后全部回停靠点。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 10 AGV / 30 任务场景完成时间 `3555s`，完成任务数 `30`，碰撞次数 `0`，任务分配失败次数 `0`；所有 AGV 最终回到 `input/agv_pool.json` 中的停靠点。
+- `test_performance` 单次运行 wall-clock 耗时约 `24.54s`。
+
+### Notes:
+
+- 如需运行 `main.m` 时显示可视化，在 `params.m` 中将 `config.mainEnableVisualization` 改为 `true`。
+- 如需关闭任务完成后的自动返航，在 `params.m` 中将 `config.returnToParkingWhenIdle` 改为 `false`。

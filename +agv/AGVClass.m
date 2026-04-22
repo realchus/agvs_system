@@ -160,7 +160,7 @@ classdef AGVClass < handle
                 obj.state = 'idle';
             elseif moveInfo.avoidanceTriggered && ~moveInfo.replannedAfterConflict
                 obj.state = 'avoiding';
-            elseif ~strcmp(obj.state, 'waiting')
+            elseif ~any(strcmp(obj.state, {'waiting', 'returning'}))
                 obj.state = 'moving';
             end
 

@@ -8,8 +8,10 @@ function config = params()
 config = struct();
 config.dt = 0.1;
 config.totalTime = 4200.0;
-config.enableVisualization = usejava('desktop');
+config.mainEnableVisualization = false;
+config.enableVisualization = config.mainEnableVisualization;
 config.visualizerVisible = config.enableVisualization;
+config.returnToParkingWhenIdle = true;
 config.waitTimeout = 5.0;
 config.dynamicObstacleSchedule = repmat(struct( ...
     'startTime', 0.0, ...
