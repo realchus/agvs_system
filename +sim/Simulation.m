@@ -60,7 +60,8 @@ classdef Simulation < handle
             if nargin < 6 || isempty(visualizerObj)
                 renderEnabled = sim.Simulation.configValue(config, 'enableVisualization', false);
                 renderVisible = sim.Simulation.configValue(config, 'visualizerVisible', renderEnabled);
-                visualizerObj = sim.Visualizer(renderEnabled, renderVisible);
+                refreshInterval = sim.Simulation.configValue(config, 'visualizationRefreshInterval', 0.0);
+                visualizerObj = sim.Visualizer(renderEnabled, renderVisible, refreshInterval);
             end
 
             obj.map = mapObj;
@@ -702,7 +703,7 @@ classdef Simulation < handle
                 return;
             end
 
-            obj.timeWindowManager.timeWindows(end + 1, 1) = parkingWindow;
+            obj.timeWindowManager.addReservedWindow(parkingWindow);
             obj.parkingReservationWindows(agvObj.id) = parkingWindow;
         end
 
@@ -713,13 +714,7 @@ classdef Simulation < handle
             end
 
             parkingWindow = obj.parkingReservationWindows(agvId);
-            keepMask = true(numel(obj.timeWindowManager.timeWindows), 1);
-            for i = 1:numel(obj.timeWindowManager.timeWindows)
-                if sim.Simulation.isSameWindow(obj.timeWindowManager.timeWindows(i), parkingWindow)
-                    keepMask(i) = false;
-                end
-            end
-            obj.timeWindowManager.timeWindows = obj.timeWindowManager.timeWindows(keepMask);
+            obj.timeWindowManager.removeReservedWindow(parkingWindow);
             remove(obj.parkingReservationWindows, agvId);
         end
 

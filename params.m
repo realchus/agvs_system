@@ -11,6 +11,7 @@ config.totalTime = 4200.0;
 config.enableHeadlessMode = false;
 config.enableVisualization = ~config.enableHeadlessMode;
 config.visualizerVisible = ~config.enableHeadlessMode;
+config.visualizationRefreshInterval = 1.0;
 config.returnToParkingWhenIdle = true;
 config.waitTimeout = 5.0;
 config.dynamicObstacleSchedule = repmat(struct( ...

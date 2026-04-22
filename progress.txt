@@ -449,3 +449,30 @@
 
 - 优化前默认场景约 6 台 AGV 参与运行；优化后 10 台 AGV 全部参与运行。
 - 优化后默认场景总完成时间保持 `1766s`，没有引入额外碰撞、重规划或任务分配失败。
+
+## [2026-04-22] - Task: 可视化降帧与时间窗索引优化
+
+### What was done:
+
+- 在 `params.m` 中新增 `config.visualizationRefreshInterval = 1.0`，用于控制可视化按仿真时间间隔刷新。
+- 扩展 `+sim/Visualizer.m`，记录上一帧渲染时间，并在未达到刷新间隔时跳过绘图。
+- 更新 `+sim/Simulation.m`，从配置读取可视化刷新间隔并传入 `Visualizer`。
+- 扩展 `+timewindow/TimeWindowManager.m`，为有效时间窗和失效时间窗维护持久化索引，并在追加窗口时增量更新索引。
+- 将停车位预留、冲突回滚等直接写 `timeWindows` 的路径改为调用时间窗管理器方法，避免数组和索引不同步。
+- 为已标准化时间窗增加快速归一化路径，减少重复结构体重建和校验。
+- 更新相关测试中的手动时间窗赋值，显式刷新索引。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过；当前 10 AGV / 30 任务场景完成时间 `322s`，碰撞次数 `0`。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_performance"`，结果通过；单次 wall-clock 耗时约 `51.26s`。
+- 运行可视化降帧轻量检查，验证 `refreshInterval=1.0` 时 `0.5s` 的中间帧会被跳过，`1.0s` 时正常刷新。
+- 运行完整测试集时 `test_task` 在既有断言处停止：当前 `input/task_list.json` 的任务 `requestTime` 均为 `0`，但测试仍断言成对 `120s` 释放节奏。排除该既有数据/测试不一致后，其余相关测试全部通过。
+
+### Notes:
+
+- 当前可视化中的蓝色虚线来自 `Visualizer` 对 `agvObj.path` 的绘制，表示 AGV 当前剩余/计划路径。
+- 当前可视化没有绘制 AGV 历史实线轨迹；地图网格实线来自 `MapClass.plot` 的栅格线，仅表示地图单元格边界。

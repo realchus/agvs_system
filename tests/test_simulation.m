@@ -71,6 +71,7 @@ tempManager = timewindow.TimeWindowManager();
 [lowWindows, lowConflict] = tempManager.reservePath(agvLow.id, lowPath, 1.0, agvLow.speed);
 assert(isempty(lowConflict), 'Secondary reservation template should succeed in isolation.');
 manager.timeWindows = [highWindows; lowWindows];
+manager.refreshIndexes();
 
 agvHigh.assignTask(highTask);
 agvHigh.assignPath(highPath);

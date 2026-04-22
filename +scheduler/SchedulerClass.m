@@ -251,7 +251,7 @@ classdef SchedulerClass < handle
                 return;
             end
 
-            obj.timeWindowManager.timeWindows = [obj.timeWindowManager.timeWindows; originalWindows];
+            obj.timeWindowManager.addReservedWindow(originalWindows);
             adjustedAgv.setTimeWindows(originalWindows);
             adjustedAgv.updateState(originalState);
             obj.timeWindowsGlobal = obj.timeWindowManager.timeWindows;

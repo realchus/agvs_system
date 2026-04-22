@@ -8,23 +8,31 @@ classdef Visualizer < handle
         figureHandle
         axesHandle
         visible
+        refreshInterval
+        lastRenderTime
     end
 
     methods
-        function obj = Visualizer(enabled, visible)
+        function obj = Visualizer(enabled, visible, refreshInterval)
             %VISUALIZER Construct a visualizer instance.
             % Inputs:
-            %   enabled - True to create/render figures.
-            %   visible - Optional figure visibility flag.
+            %   enabled         - True to create/render figures.
+            %   visible         - Optional figure visibility flag.
+            %   refreshInterval - Minimum simulated seconds between frames.
             if nargin < 1 || isempty(enabled)
                 enabled = true;
             end
             if nargin < 2 || isempty(visible)
                 visible = enabled;
             end
+            if nargin < 3 || isempty(refreshInterval)
+                refreshInterval = 0.0;
+            end
 
             obj.enabled = logical(enabled);
             obj.visible = logical(visible);
+            obj.refreshInterval = max(0.0, double(refreshInterval));
+            obj.lastRenderTime = -inf;
             obj.figureHandle = [];
             obj.axesHandle = [];
         end
@@ -37,6 +45,9 @@ classdef Visualizer < handle
             %   currentTime      - Simulation time.
             %   dynamicObstacles - N-by-2 obstacle positions.
             if ~obj.enabled
+                return;
+            end
+            if currentTime - obj.lastRenderTime < obj.refreshInterval - eps
                 return;
             end
 
@@ -80,6 +91,7 @@ classdef Visualizer < handle
 
             title(obj.axesHandle, sprintf('Simulation Time: %.1f s', currentTime));
             hold(obj.axesHandle, 'off');
+            obj.lastRenderTime = currentTime;
             drawnow limitrate;
         end
     end

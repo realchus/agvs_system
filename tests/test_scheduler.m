@@ -89,6 +89,7 @@ agvLow.setTimeWindows(lowWindows);
 
 manager = timewindow.TimeWindowManager();
 manager.timeWindows = [highWindows; lowWindows];
+manager.refreshIndexes();
 
 waitScheduler = scheduler.SchedulerClass( ...
     conflictMap, [agvHigh; agvLow], [highTask; lowTask], repmat(struct(), 0, 1), manager);
@@ -130,6 +131,7 @@ agvLow.isLoaded = true;
 
 manager = timewindow.TimeWindowManager();
 manager.timeWindows = [highWindows; lowWindows];
+manager.refreshIndexes();
 
 pathLibraryData = buildLibraryEntry(lowTask, agvLow, lowDirectPath, lowDetourPath);
 replanScheduler = scheduler.SchedulerClass( ...

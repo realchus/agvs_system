@@ -6,6 +6,8 @@ classdef TimeWindowManager < handle
     properties
         timeWindows
         invalidatedWindows
+        timeWindowIndex
+        invalidatedWindowIndex
     end
 
     methods
@@ -13,6 +15,8 @@ classdef TimeWindowManager < handle
             %TIMEWINDOWMANAGER Construct an empty time window manager.
             obj.timeWindows = timewindow.TimeWindowManager.emptyWindowArray();
             obj.invalidatedWindows = timewindow.TimeWindowManager.emptyWindowArray();
+            obj.timeWindowIndex = timewindow.TimeWindowManager.emptyWindowIndex();
+            obj.invalidatedWindowIndex = timewindow.TimeWindowManager.emptyWindowIndex();
         end
 
         function window = addTimeWindow(obj, edgeIndex, startTime, endTime, agvId, direction)
@@ -28,7 +32,7 @@ classdef TimeWindowManager < handle
             window = timewindow.TimeWindowManager.buildWindow( ...
                 edgeIndex, startTime, endTime, agvId, direction);
 
-            obj.timeWindows(end + 1, 1) = window; %#ok<AGROW>
+            obj.addReservedWindow(window);
         end
 
         function window = addNodeTimeWindow(obj, nodeIndex, startTime, endTime, agvId)
@@ -43,7 +47,58 @@ classdef TimeWindowManager < handle
             window = timewindow.TimeWindowManager.buildNodeWindow( ...
                 nodeIndex, startTime, endTime, agvId);
 
-            obj.timeWindows(end + 1, 1) = window; %#ok<AGROW>
+            obj.addReservedWindow(window);
+        end
+
+        function addReservedWindow(obj, windows)
+            %ADDRESERVEDWINDOW Append active windows and update the index.
+            if isempty(windows)
+                return;
+            end
+
+            windows = timewindow.TimeWindowManager.normalizeWindowArray(windows);
+            obj.timeWindows = [obj.timeWindows; windows];
+            obj.timeWindowIndex = timewindow.TimeWindowManager.insertWindowsIntoIndex( ...
+                obj.timeWindowIndex, windows);
+        end
+
+        function addInvalidatedWindow(obj, windows)
+            %ADDINVALIDATEDWINDOW Append blocked windows and update the index.
+            if isempty(windows)
+                return;
+            end
+
+            windows = timewindow.TimeWindowManager.normalizeWindowArray(windows);
+            obj.invalidatedWindows = [obj.invalidatedWindows; windows];
+            obj.invalidatedWindowIndex = timewindow.TimeWindowManager.insertWindowsIntoIndex( ...
+                obj.invalidatedWindowIndex, windows);
+        end
+
+        function removeReservedWindow(obj, targetWindow)
+            %REMOVERESERVEDWINDOW Remove matching active windows and refresh the index.
+            if isempty(obj.timeWindows) || isempty(targetWindow)
+                return;
+            end
+
+            keepMask = true(numel(obj.timeWindows), 1);
+            for i = 1:numel(obj.timeWindows)
+                for j = 1:numel(targetWindow)
+                    if timewindow.TimeWindowManager.isSameWindow(obj.timeWindows(i), targetWindow(j))
+                        keepMask(i) = false;
+                        break;
+                    end
+                end
+            end
+            obj.timeWindows = obj.timeWindows(keepMask);
+            obj.refreshIndexes();
+        end
+
+        function refreshIndexes(obj)
+            %REFRESHINDEXES Rebuild persistent indexes after bulk mutation.
+            obj.timeWindows = timewindow.TimeWindowManager.normalizeWindowArray(obj.timeWindows);
+            obj.invalidatedWindows = timewindow.TimeWindowManager.normalizeWindowArray(obj.invalidatedWindows);
+            obj.timeWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows);
+            obj.invalidatedWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.invalidatedWindows);
         end
 
         function [hasConflict, conflictInfo] = detectConflict(obj, newWindow, existingWindows, existingIndex)
@@ -70,16 +125,18 @@ classdef TimeWindowManager < handle
                 'newWindow', newWindow, ...
                 'existingWindow', timewindow.TimeWindowManager.emptyWindowArray());
 
-            if ~hasExistingIndex
-                if isempty(existingWindows)
-                    existingIndex = timewindow.TimeWindowManager.buildWindowIndex( ...
-                        [obj.timeWindows; obj.invalidatedWindows]);
-                else
-                    existingIndex = timewindow.TimeWindowManager.buildWindowIndex(existingWindows);
-                end
+            if ~hasExistingIndex && ~isempty(existingWindows)
+                existingIndex = timewindow.TimeWindowManager.buildWindowIndex(existingWindows);
             end
 
-            [hasConflict, existing] = timewindow.TimeWindowManager.findConflictInIndex(newWindow, existingIndex);
+            if hasExistingIndex || ~isempty(existingWindows)
+                [hasConflict, existing] = timewindow.TimeWindowManager.findConflictInIndex(newWindow, existingIndex);
+            else
+                [hasConflict, existing] = timewindow.TimeWindowManager.findConflictInIndex(newWindow, obj.timeWindowIndex);
+                if ~hasConflict
+                    [hasConflict, existing] = timewindow.TimeWindowManager.findConflictInIndex(newWindow, obj.invalidatedWindowIndex);
+                end
+            end
             if ~hasConflict
                 return;
             end
@@ -154,8 +211,8 @@ classdef TimeWindowManager < handle
                 return;
             end
 
-            activeIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows);
-            invalidatedIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.invalidatedWindows);
+            activeIndex = obj.timeWindowIndex;
+            invalidatedIndex = obj.invalidatedWindowIndex;
             candidateIndex = timewindow.TimeWindowManager.emptyWindowIndex();
             candidateWindows = timewindow.TimeWindowManager.emptyWindowArray();
             currentTime = double(startTime);
@@ -243,7 +300,7 @@ classdef TimeWindowManager < handle
                 return;
             end
 
-            obj.timeWindows = [obj.timeWindows; candidateWindows];
+            obj.addReservedWindow(candidateWindows);
             reservedWindows = candidateWindows;
             conflictInfo = [];
         end
@@ -294,8 +351,11 @@ classdef TimeWindowManager < handle
             end
 
             obj.timeWindows = obj.timeWindows(keepMask);
+            obj.timeWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.timeWindows);
             if ~isempty(invalidated)
-                obj.invalidatedWindows = [obj.invalidatedWindows; invalidated];
+                obj.addInvalidatedWindow(invalidated);
+            else
+                obj.invalidatedWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(obj.invalidatedWindows);
             end
         end
 
@@ -318,6 +378,7 @@ classdef TimeWindowManager < handle
                     end
                 end
                 obj.timeWindows = obj.timeWindows(keepMask);
+                obj.refreshIndexes();
                 return;
             end
 
@@ -336,6 +397,7 @@ classdef TimeWindowManager < handle
             end
 
             obj.timeWindows = obj.timeWindows(keepMask);
+            obj.refreshIndexes();
         end
 
         function windows = getAllWindows(obj)
@@ -454,6 +516,20 @@ classdef TimeWindowManager < handle
                     'Time window structs must define edgeIndex, startTime, endTime, agvId, and direction.');
             end
 
+            if all(isfield(window, {'nodeIndex', 'windowType'})) && ...
+                    numel(window.edgeIndex) == 4 && numel(window.nodeIndex) == 2 && ...
+                    isscalar(window.startTime) && isscalar(window.endTime) && ...
+                    isscalar(window.agvId) && isscalar(window.direction)
+                window.edgeIndex = double(window.edgeIndex(:))';
+                window.nodeIndex = double(window.nodeIndex(:))';
+                window.startTime = double(window.startTime);
+                window.endTime = double(window.endTime);
+                window.agvId = double(window.agvId);
+                window.direction = double(window.direction);
+                window.windowType = char(string(window.windowType));
+                return;
+            end
+
             if isfield(window, 'windowType') && strcmp(char(string(window.windowType)), 'node')
                 if isfield(window, 'nodeIndex') && ~isempty(window.nodeIndex)
                     nodeIndex = window.nodeIndex;
@@ -466,6 +542,21 @@ classdef TimeWindowManager < handle
                 window = timewindow.TimeWindowManager.buildWindow( ...
                     window.edgeIndex, window.startTime, window.endTime, window.agvId, window.direction);
             end
+        end
+
+        function windows = normalizeWindowArray(windows)
+            %NORMALIZEWINDOWARRAY Normalize every entry in a window array.
+            if isempty(windows)
+                windows = timewindow.TimeWindowManager.emptyWindowArray();
+                return;
+            end
+
+            normalized = timewindow.TimeWindowManager.emptyWindowArray();
+            normalized(numel(windows), 1) = timewindow.TimeWindowManager.normalizeWindow(windows(end));
+            for i = 1:numel(windows)
+                normalized(i, 1) = timewindow.TimeWindowManager.normalizeWindow(windows(i));
+            end
+            windows = normalized;
         end
 
         function indexMap = buildWindowIndex(windows)
@@ -501,6 +592,13 @@ classdef TimeWindowManager < handle
             end
 
             indexMap(key) = timewindow.TimeWindowManager.sortWindowsByTime(indexedWindows);
+        end
+
+        function indexMap = insertWindowsIntoIndex(indexMap, windows)
+            %INSERTWINDOWSINTOINDEX Insert multiple windows into an index.
+            for i = 1:numel(windows)
+                indexMap = timewindow.TimeWindowManager.insertWindowIntoIndex(indexMap, windows(i));
+            end
         end
 
         function [hasConflict, existingWindow] = findConflictInIndex(newWindow, indexMap)
@@ -630,6 +728,18 @@ classdef TimeWindowManager < handle
                 window = timewindow.TimeWindowManager.buildWindow( ...
                     window.edgeIndex, startTime, endTime, agvId, window.direction);
             end
+        end
+
+        function tf = isSameWindow(windowA, windowB)
+            %ISSAMEWINDOW Compare time-window resource, owner, and timing.
+            windowA = timewindow.TimeWindowManager.normalizeWindow(windowA);
+            windowB = timewindow.TimeWindowManager.normalizeWindow(windowB);
+            tf = strcmp(windowA.windowType, windowB.windowType) && ...
+                isequal(windowA.edgeIndex, windowB.edgeIndex) && ...
+                isequal(windowA.nodeIndex, windowB.nodeIndex) && ...
+                windowA.agvId == windowB.agvId && ...
+                abs(windowA.startTime - windowB.startTime) <= eps && ...
+                abs(windowA.endTime - windowB.endTime) <= eps;
         end
     end
 end
