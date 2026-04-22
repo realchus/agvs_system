@@ -273,3 +273,23 @@
 
 - 当前默认场景为 28x62 栅格、3 台 AGV、5 个任务，仿真完成时刻为 `181s`；优化后默认场景可明显快于实时运行。
 - 后续若面向更大规模工程场景，仍建议增加 10/20/50 台 AGV 与更多任务的压力测试，并统计 P95/P99 调度延迟。
+
+## [2026-04-22] - Task: 调整默认任务起终点
+
+### What was done:
+
+- 修改 `data/createTaskList.m`，默认任务起点/终点只使用货架、左侧拣货窗口和右侧上货窗口，不再使用 AGV 停靠点作为业务起点。
+- 将左侧拣货窗口定义为地图第 2 行第 1..20 列，右侧上货窗口定义为地图第 2 行第 43..62 列，并为默认任务选择具体窗口栅格。
+- 重新生成 `data/task_list.json`、`data/task_list.mat` 和 `data/path_library.mat`。
+- 更新 `scheduler/SchedulerClass.m`，在任务分配时自动注册任务起点和终点为可通行目标，使货架/窗口作为起点时调度器单独调用也能正常规划。
+- 更新 `tests/test_task.m`，校验默认任务不再使用第 1 行 AGV 停靠点，并检查左右窗口点位位于第 2 行对应工作区。
+
+### Testing:
+
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 新默认场景完成时间 `182s`，碰撞次数 `0`，动态避障次数 `1`，任务分配失败次数 `0`。
+- `test_performance` 3 次运行平均耗时约 `0.9129s`。
+
+### Notes:
+
+- 第 4 个右侧上货窗口任务请求时间调整为 `90s`，避免默认 3 AGV 场景中右侧入库任务在主通道形成相向硬冲突。

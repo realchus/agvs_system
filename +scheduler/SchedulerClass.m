@@ -121,6 +121,7 @@ classdef SchedulerClass < handle
             assignedWindows = timewindow.TimeWindowManager.emptyWindowArray();
             sourceLabel = '';
 
+            obj.map.registerTaskTarget(taskObj.id, [taskObj.start; taskObj.getWaypointPositions()]);
             [candidatePaths, sourceLabel] = obj.getCandidatePaths(taskObj, agvObj);
             if isempty(candidatePaths)
                 sourceLabel = 'astar';

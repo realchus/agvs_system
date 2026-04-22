@@ -21,21 +21,39 @@ assert(numel(matTasks) == 5, 'MAT parser should load five tasks.');
 
 firstTask = jsonTasks(1);
 assert(firstTask.id == 1, 'First task id is incorrect.');
-assert(isequal(firstTask.start, [1, 25]), 'First task start position is incorrect.');
+assert(isequal(firstTask.start, [5, 5]), 'First task start position is incorrect.');
 assert(firstTask.priority == 1, 'Priority should be initialized to 1.');
 assert(firstTask.requestTime == 0, 'Request time initialization is incorrect.');
 assert(strcmp(firstTask.status, 'pending'), 'Initial task status should be pending.');
 
 waypointNames = firstTask.getWaypointNames();
-assert(strcmp(waypointNames{1}, '货架1'), 'Waypoint name parsing failed.');
+assert(strcmp(waypointNames{1}, '左侧拣货窗口'), 'Waypoint name parsing failed.');
 
 positions = firstTask.getWaypointPositions();
-assert(isequal(positions(2, :), [2, 10]), 'Waypoint positions were not parsed correctly.');
+assert(isequal(positions(1, :), [2, 10]), 'Waypoint positions were not parsed correctly.');
 
 thirdTask = matTasks(3);
 assert(thirdTask.requestTime == 20, 'Request time sequence should be preserved from MAT data.');
-assert(strcmp(thirdTask.waypoints(1).name, '右侧上货窗口'), ...
+assert(isequal(thirdTask.start, [2, 55]), 'Third task should start from the right loading window.');
+assert(strcmp(thirdTask.waypoints(1).name, '货架3'), ...
     'MAT parser did not preserve waypoint names.');
+
+assert(matTasks(4).requestTime == 90, ...
+    'Fourth task should be delayed to avoid opposite-direction default traffic.');
+
+allStarts = reshape([matTasks.start], 2, []).';
+allEnds = zeros(numel(matTasks), 2);
+for i = 1:numel(matTasks)
+    positions = matTasks(i).getWaypointPositions();
+    allEnds(i, :) = positions(end, :);
+end
+
+assert(all(allStarts(:, 1) ~= 1), 'Task starts should no longer use AGV parking cells.');
+assert(all(allEnds(:, 1) ~= 1), 'Task ends should no longer use AGV parking cells.');
+assert(all(ismember(allStarts([3, 4], 2), 43:62) & allStarts([3, 4], 1) == 2), ...
+    'Right loading window starts must be on row 2, columns 43..62.');
+assert(all(ismember(allEnds([1, 2, 5], 2), 1:20) & allEnds([1, 2, 5], 1) == 2), ...
+    'Left picking window ends must be on row 2, columns 1..20.');
 
 thirdTask.updateStatus('assigned');
 assert(strcmp(thirdTask.status, 'assigned'), 'Task status update failed.');

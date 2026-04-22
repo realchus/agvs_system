@@ -2,25 +2,16 @@
   {
     "id": 1,
     "start": [
-      1,
-      25
+      5,
+      5
     ],
-    "waypoints": [
-      {
-        "name": "货架1",
-        "position": [
-          5,
-          5
-        ]
-      },
-      {
-        "name": "左侧拣货窗口",
-        "position": [
-          2,
-          10
-        ]
-      }
-    ],
+    "waypoints": {
+      "name": "左侧拣货窗口",
+      "position": [
+        2,
+        10
+      ]
+    },
     "priority": 1,
     "requestTime": 0,
     "status": "pending"
@@ -28,25 +19,16 @@
   {
     "id": 2,
     "start": [
-      1,
-      32
+      9,
+      15
     ],
-    "waypoints": [
-      {
-        "name": "货架2",
-        "position": [
-          9,
-          15
-        ]
-      },
-      {
-        "name": "左侧拣货窗口",
-        "position": [
-          2,
-          10
-        ]
-      }
-    ],
+    "waypoints": {
+      "name": "左侧拣货窗口",
+      "position": [
+        2,
+        15
+      ]
+    },
     "priority": 1,
     "requestTime": 10,
     "status": "pending"
@@ -54,25 +36,16 @@
   {
     "id": 3,
     "start": [
-      1,
-      38
+      2,
+      55
     ],
-    "waypoints": [
-      {
-        "name": "右侧上货窗口",
-        "position": [
-          2,
-          55
-        ]
-      },
-      {
-        "name": "货架3",
-        "position": [
-          13,
-          25
-        ]
-      }
-    ],
+    "waypoints": {
+      "name": "货架3",
+      "position": [
+        13,
+        25
+      ]
+    },
     "priority": 1,
     "requestTime": 20,
     "status": "pending"
@@ -80,51 +53,33 @@
   {
     "id": 4,
     "start": [
-      1,
-      25
+      2,
+      60
     ],
-    "waypoints": [
-      {
-        "name": "右侧上货窗口",
-        "position": [
-          2,
-          55
-        ]
-      },
-      {
-        "name": "货架4",
-        "position": [
-          17,
-          35
-        ]
-      }
-    ],
+    "waypoints": {
+      "name": "货架4",
+      "position": [
+        17,
+        35
+      ]
+    },
     "priority": 1,
-    "requestTime": 30,
+    "requestTime": 90,
     "status": "pending"
   },
   {
     "id": 5,
     "start": [
-      1,
-      32
+      21,
+      45
     ],
-    "waypoints": [
-      {
-        "name": "货架5",
-        "position": [
-          21,
-          45
-        ]
-      },
-      {
-        "name": "左侧拣货窗口",
-        "position": [
-          2,
-          10
-        ]
-      }
-    ],
+    "waypoints": {
+      "name": "左侧拣货窗口",
+      "position": [
+        2,
+        5
+      ]
+    },
     "priority": 1,
     "requestTime": 40,
     "status": "pending"
