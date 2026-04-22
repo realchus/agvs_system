@@ -17,6 +17,7 @@ classdef Simulation < handle
         serviceStates
         agvTravelDistance
         taskCompletionTimes
+        conflictCheckRequired
     end
 
     methods
@@ -66,6 +67,7 @@ classdef Simulation < handle
             obj.serviceStates = containers.Map('KeyType', 'double', 'ValueType', 'any');
             obj.agvTravelDistance = containers.Map('KeyType', 'double', 'ValueType', 'double');
             obj.taskCompletionTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
+            obj.conflictCheckRequired = true;
 
             for i = 1:numel(obj.agvPool)
                 obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
@@ -96,12 +98,20 @@ classdef Simulation < handle
             %STEP Advance the simulation by one configured time step.
             dt = sim.Simulation.configValue(obj.config, 'dt', 0.1);
 
-            obj.assignPendingTasks();
-            obj.resolveActiveConflicts();
+            if obj.assignPendingTasks()
+                obj.conflictCheckRequired = true;
+            end
+            if obj.conflictCheckRequired
+                obj.resolveActiveConflicts();
+                obj.conflictCheckRequired = false;
+            end
 
             dynamicObstacles = obj.getDynamicObstacles();
             for i = 1:numel(obj.agvPool)
-                obj.advanceAgv(obj.agvPool(i), dt, dynamicObstacles);
+                moveInfo = obj.advanceAgv(obj.agvPool(i), dt, dynamicObstacles);
+                if moveInfo.avoidanceTriggered || moveInfo.conflictDetected || moveInfo.replannedAfterConflict
+                    obj.conflictCheckRequired = true;
+                end
             end
 
             obj.syncMapOccupancy();
@@ -111,8 +121,9 @@ classdef Simulation < handle
     end
 
     methods (Access = private)
-        function assignPendingTasks(obj)
+        function didAssign = assignPendingTasks(obj)
             %ASSIGNPENDINGTASKS Dispatch ready tasks to idle AGVs.
+            didAssign = false;
             orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
             idleMask = arrayfun(@(a) isempty(a.currentTask) && strcmp(a.state, 'idle'), obj.agvPool);
             idleAgvs = obj.agvPool(idleMask);
@@ -135,6 +146,7 @@ classdef Simulation < handle
                     'taskId', nextTask.id, ...
                     'nextWaypointIndex', 1, ...
                     'phase', 'travel');
+                didAssign = true;
                 obj.logEvent('task_assigned', idleAgvs(i).id, nextTask.id, ...
                     sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
             end
@@ -176,8 +188,9 @@ classdef Simulation < handle
             end
         end
 
-        function advanceAgv(obj, agvObj, dt, dynamicObstacles)
+        function moveInfo = advanceAgv(obj, agvObj, dt, dynamicObstacles)
             %ADVANCEAGV Progress one AGV through movement or service states.
+            moveInfo = agv.AGVClass.emptyMoveInfo();
             previousPosition = agvObj.position;
 
             if strcmp(agvObj.state, 'waiting')

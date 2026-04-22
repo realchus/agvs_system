@@ -252,3 +252,24 @@
 
 - 性能测试中的平均 wall-clock 运行时间低于完整场景的仿真时长 `260s`，满足当前“实时性”目标
 - `tests/test_performance.m` 会重复执行完整场景，运行时间明显长于普通单元测试，后续可按 CI 需求拆分为冒烟与性能两类测试
+
+## [2026-04-22] - Task: 性能优化
+
+### What was done:
+
+- 优化 `+scheduler/SchedulerClass.m` 的 AGV 间时间窗冲突检查，为被比较 AGV 的时间窗只构建一次索引并复用，避免逐个窗口重复重建索引。
+- 优化 `+sim/Simulation.m` 的主循环，新增 `conflictCheckRequired` 脏标记；仅在任务分配、初始预分配检查或动态避障/重规划改变时间窗后触发全局冲突检查，避免每个仿真步重复扫描所有 AGV 对。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_dwa"`，结果通过。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 完整场景单次实测从优化前约 `114.06s` 降至约 `1.58s`；`test_performance` 3 次运行平均耗时约 `1.02s`。
+
+### Notes:
+
+- 当前默认场景为 28x62 栅格、3 台 AGV、5 个任务，仿真完成时刻为 `181s`；优化后默认场景可明显快于实时运行。
+- 后续若面向更大规模工程场景，仍建议增加 10/20/50 台 AGV 与更多任务的压力测试，并统计 P95/P99 调度延迟。

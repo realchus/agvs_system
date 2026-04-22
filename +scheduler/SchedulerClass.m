@@ -367,8 +367,10 @@ classdef SchedulerClass < handle
                 return;
             end
 
+            agvBWindowIndex = timewindow.TimeWindowManager.buildWindowIndex(agvB.timeWindows);
             for i = 1:numel(agvA.timeWindows)
-                [hasConflict, rawConflict] = obj.timeWindowManager.detectConflict(agvA.timeWindows(i), agvB.timeWindows);
+                [hasConflict, rawConflict] = obj.timeWindowManager.detectConflict( ...
+                    agvA.timeWindows(i), [], agvBWindowIndex);
                 if ~hasConflict
                     continue;
                 end
