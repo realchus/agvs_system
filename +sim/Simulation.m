@@ -21,6 +21,7 @@ classdef Simulation < handle
         parkingPositions
         completedTaskCount
         nextPendingRequestTime
+        taskAssignmentRetryTimes
     end
 
     methods
@@ -77,6 +78,7 @@ classdef Simulation < handle
             obj.parkingPositions = containers.Map('KeyType', 'double', 'ValueType', 'any');
             obj.completedTaskCount = sum(arrayfun(@(t) strcmp(t.status, 'completed'), obj.taskList));
             obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
+            obj.taskAssignmentRetryTimes = containers.Map('KeyType', 'double', 'ValueType', 'double');
 
             for i = 1:numel(obj.agvPool)
                 obj.agvTravelDistance(obj.agvPool(i).id) = 0.0;
@@ -148,9 +150,10 @@ classdef Simulation < handle
             end
 
             orderedTasks = obj.scheduler.updatePriority(obj.currentTime);
+            skippedTaskIds = [];
 
             while ~isempty(idleAgvs)
-                nextTask = obj.findAssignableTask(orderedTasks);
+                nextTask = obj.findAssignableTask(orderedTasks, skippedTaskIds);
                 if isempty(nextTask)
                     obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
                     return;
@@ -174,10 +177,11 @@ classdef Simulation < handle
                 end
 
                 if ~success
-                    obj.logEvent('task_assignment_failed', 0, nextTask.id, ...
-                        'No idle AGV could reserve a feasible route.');
-                    obj.nextPendingRequestTime = obj.computeNextPendingRequestTime();
-                    return;
+                    obj.logEvent('task_assignment_deferred', 0, nextTask.id, ...
+                        'No idle AGV could reserve this route in the current dispatch pass.');
+                    obj.deferTaskRetry(nextTask.id);
+                    skippedTaskIds(end + 1) = nextTask.id; %#ok<AGROW>
+                    continue;
                 end
 
                 nextTask.updateStatus('executing');
@@ -186,6 +190,7 @@ classdef Simulation < handle
                     'nextWaypointIndex', 1, ...
                     'phase', 'travel');
                 didAssign = true;
+                obj.clearTaskRetry(nextTask.id);
                 obj.logEvent('task_assigned', selectedAgv.id, nextTask.id, ...
                     sprintf('Assigned via %s with %d path nodes.', sourceLabel, size(assignedPath, 1)));
                 idleAgvs(selectedIndex) = [];
@@ -216,6 +221,9 @@ classdef Simulation < handle
             if ~sim.Simulation.configValue(obj.config, 'returnToParkingWhenIdle', true)
                 return;
             end
+            if obj.hasReadyPendingTasks()
+                return;
+            end
 
             for i = 1:numel(obj.agvPool)
                 agvObj = obj.agvPool(i);
@@ -229,8 +237,9 @@ classdef Simulation < handle
                 parkingPosition = obj.parkingPositionFor(agvObj);
                 currentPosition = round(double(agvObj.position(:))');
                 returnTargetId = -agvObj.id;
-                obj.map.registerTaskTarget(returnTargetId, [currentPosition; parkingPosition]);
-                returnPath = pathplan.AStar(obj.map, currentPosition, parkingPosition, agvObj.id, returnTargetId);
+                returnMap = obj.buildParkingReturnMap(agvObj, currentPosition, parkingPosition);
+                returnMap.registerTaskTarget(returnTargetId, [currentPosition; parkingPosition]);
+                returnPath = pathplan.AStar(returnMap, currentPosition, parkingPosition, agvObj.id, returnTargetId);
                 if isempty(returnPath)
                     obj.logEvent('parking_return_failed', agvObj.id, 0, 'No feasible route to parking point.');
                     continue;
@@ -251,11 +260,20 @@ classdef Simulation < handle
             end
         end
 
-        function nextTask = findAssignableTask(obj, orderedTasks)
+        function nextTask = findAssignableTask(obj, orderedTasks, skippedTaskIds)
             %FINDASSIGNABLETASK Return the first pending task whose request time has arrived.
+            if nargin < 3
+                skippedTaskIds = [];
+            end
             nextTask = [];
             for i = 1:numel(orderedTasks)
+                if any(skippedTaskIds == orderedTasks(i).id)
+                    continue;
+                end
                 if strcmp(orderedTasks(i).status, 'pending') && orderedTasks(i).requestTime <= obj.currentTime
+                    if obj.isTaskRetryCoolingDown(orderedTasks(i).id)
+                        continue;
+                    end
                     nextTask = orderedTasks(i);
                     return;
                 end
@@ -566,6 +584,65 @@ classdef Simulation < handle
         function tf = isAgvParked(obj, agvObj)
             %ISAGVPARKED Compare current position with the stored parking point.
             tf = isequal(round(double(agvObj.position(:))'), obj.parkingPositionFor(agvObj));
+        end
+
+        function tf = hasReadyPendingTasks(obj)
+            %HASREADYPENDINGTASKS Return true when a pending task can be dispatched now.
+            tf = false;
+            for i = 1:numel(obj.taskList)
+                if strcmp(obj.taskList(i).status, 'pending') && obj.taskList(i).requestTime <= obj.currentTime
+                    tf = true;
+                    return;
+                end
+            end
+        end
+
+        function tf = isTaskRetryCoolingDown(obj, taskId)
+            %ISTASKRETRYCOOLINGDOWN Return true when a deferred task should wait.
+            tf = isKey(obj.taskAssignmentRetryTimes, taskId) && ...
+                obj.currentTime + eps < obj.taskAssignmentRetryTimes(taskId);
+        end
+
+        function deferTaskRetry(obj, taskId)
+            %DEFERTASKRETRY Avoid repeating the same failed route search every step.
+            retryDelay = sim.Simulation.configValue(obj.config, 'assignmentRetryDelay', 10.0);
+            obj.taskAssignmentRetryTimes(taskId) = obj.currentTime + retryDelay;
+        end
+
+        function clearTaskRetry(obj, taskId)
+            %CLEARTASKRETRY Remove retry throttling once a task is assigned.
+            if isKey(obj.taskAssignmentRetryTimes, taskId)
+                remove(obj.taskAssignmentRetryTimes, taskId);
+            end
+        end
+
+        function returnMap = buildParkingReturnMap(obj, agvObj, currentPosition, parkingPosition)
+            %BUILDPARKINGRETURNMAP Keep other parking cells out of return routes.
+            blockedGrid = obj.map.baseGrid;
+            for i = 1:numel(obj.agvPool)
+                otherAgv = obj.agvPool(i);
+                if otherAgv.id == agvObj.id
+                    continue;
+                end
+                otherParking = obj.parkingPositionFor(otherAgv);
+                if isequal(otherParking, currentPosition) || isequal(otherParking, parkingPosition)
+                    continue;
+                end
+                blockedGrid(otherParking(1), otherParking(2)) = 3;
+            end
+
+            returnMap = map.MapClass(blockedGrid, obj.map.colors);
+            for i = 1:numel(obj.agvPool)
+                otherAgv = obj.agvPool(i);
+                taskId = obj.primaryTaskId(otherAgv);
+                if taskId == 0
+                    taskId = [];
+                end
+                gridPosition = round(otherAgv.position);
+                if returnMap.isPassable(gridPosition(1), gridPosition(2), otherAgv.id, taskId)
+                    returnMap.setAGVOccupancy(otherAgv.id, gridPosition(1), gridPosition(2), taskId);
+                end
+            end
         end
 
         function parkingPosition = parkingPositionFor(obj, agvObj)
