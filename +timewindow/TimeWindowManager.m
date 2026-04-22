@@ -31,6 +31,21 @@ classdef TimeWindowManager < handle
             obj.timeWindows(end + 1, 1) = window; %#ok<AGROW>
         end
 
+        function window = addNodeTimeWindow(obj, nodeIndex, startTime, endTime, agvId)
+            %ADDNODETIMEWINDOW Add a single node occupancy window.
+            % Inputs:
+            %   nodeIndex - 1-by-2 node coordinate [row col].
+            %   startTime - Reservation start time.
+            %   endTime   - Reservation end time.
+            %   agvId     - AGV identifier.
+            % Output:
+            %   window    - Struct representation of the added node window.
+            window = timewindow.TimeWindowManager.buildNodeWindow( ...
+                nodeIndex, startTime, endTime, agvId);
+
+            obj.timeWindows(end + 1, 1) = window; %#ok<AGROW>
+        end
+
         function [hasConflict, conflictInfo] = detectConflict(obj, newWindow, existingWindows, existingIndex)
             %DETECTCONFLICT Detect overlap conflicts for a candidate window.
             % Inputs:
@@ -68,27 +83,42 @@ classdef TimeWindowManager < handle
                 return;
             end
 
-            if existing.agvId == 0
-                conflictType = 'invalidated_edge';
-                message = sprintf( ...
-                    'Blocked edge [%d %d %d %d] overlaps AGV %d reservation.', ...
-                    newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
-                    newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
-                    newWindow.agvId);
-            elseif existing.direction == newWindow.direction
-                conflictType = 'same_direction_overlap';
-                message = sprintf( ...
-                    'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
-                    newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
-                    newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
-                    newWindow.agvId, existing.agvId);
+            if strcmp(newWindow.windowType, 'node')
+                if existing.agvId == 0
+                    conflictType = 'invalidated_node';
+                    message = sprintf( ...
+                        'Blocked node [%d %d] overlaps AGV %d reservation.', ...
+                        newWindow.nodeIndex(1), newWindow.nodeIndex(2), newWindow.agvId);
+                else
+                    conflictType = 'node_overlap';
+                    message = sprintf( ...
+                        'Conflict on node [%d %d] between AGV %d and AGV %d.', ...
+                        newWindow.nodeIndex(1), newWindow.nodeIndex(2), ...
+                        newWindow.agvId, existing.agvId);
+                end
             else
-                conflictType = 'opposite_direction_overlap';
-                message = sprintf( ...
-                    'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
-                    newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
-                    newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
-                    newWindow.agvId, existing.agvId);
+                if existing.agvId == 0
+                    conflictType = 'invalidated_edge';
+                    message = sprintf( ...
+                        'Blocked edge [%d %d %d %d] overlaps AGV %d reservation.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId);
+                elseif existing.direction == newWindow.direction
+                    conflictType = 'same_direction_overlap';
+                    message = sprintf( ...
+                        'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId, existing.agvId);
+                else
+                    conflictType = 'opposite_direction_overlap';
+                    message = sprintf( ...
+                        'Conflict on edge [%d %d %d %d] between AGV %d and AGV %d.', ...
+                        newWindow.edgeIndex(1), newWindow.edgeIndex(2), ...
+                        newWindow.edgeIndex(3), newWindow.edgeIndex(4), ...
+                        newWindow.agvId, existing.agvId);
+                end
             end
 
             conflictInfo.type = conflictType;
@@ -96,19 +126,26 @@ classdef TimeWindowManager < handle
             conflictInfo.existingWindow = existing;
         end
 
-        function [reservedWindows, conflictInfo] = reservePath(obj, agvId, path, startTime, speed)
+        function [reservedWindows, conflictInfo] = reservePath(obj, agvId, path, startTime, speed, nodeDwellTimes)
             %RESERVEPATH Reserve time windows for every edge in a path.
             % Inputs:
-            %   agvId     - AGV identifier.
-            %   path      - N-by-2 path coordinates.
-            %   startTime - Path start time.
-            %   speed     - Traversal speed in grid units per second.
+            %   agvId          - AGV identifier.
+            %   path           - N-by-2 path coordinates.
+            %   startTime      - Path start time.
+            %   speed          - Traversal speed in grid units per second.
+            %   nodeDwellTimes - Optional N-by-1 dwell seconds at path nodes.
             % Outputs:
             %   reservedWindows - Reserved window array. Empty on conflict.
             %   conflictInfo    - Empty if reservation succeeds.
             validateattributes(path, {'numeric'}, {'2d', 'ncols', 2, 'finite'});
             validateattributes(startTime, {'numeric'}, {'scalar', 'finite', 'nonnegative'});
             validateattributes(speed, {'numeric'}, {'scalar', 'positive', 'finite'});
+            if nargin < 6 || isempty(nodeDwellTimes)
+                nodeDwellTimes = zeros(size(path, 1), 1);
+            end
+            validateattributes(nodeDwellTimes, {'numeric'}, ...
+                {'vector', 'numel', size(path, 1), 'finite', 'nonnegative'});
+            nodeDwellTimes = double(nodeDwellTimes(:));
 
             if size(path, 1) < 2
                 reservedWindows = timewindow.TimeWindowManager.emptyWindowArray();
@@ -125,6 +162,28 @@ classdef TimeWindowManager < handle
             for i = 1:(size(path, 1) - 1)
                 startNode = double(path(i, :));
                 endNode = double(path(i + 1, :));
+
+                dwellEndTime = currentTime + nodeDwellTimes(i);
+                if dwellEndTime > currentTime
+                    candidate = timewindow.TimeWindowManager.buildNodeWindow( ...
+                        startNode, currentTime, dwellEndTime, agvId);
+                    [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], activeIndex);
+                    if ~hasConflict
+                        [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], invalidatedIndex);
+                    end
+                    if ~hasConflict
+                        [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], candidateIndex);
+                    end
+                    if hasConflict
+                        reservedWindows = timewindow.TimeWindowManager.emptyWindowArray();
+                        return;
+                    end
+
+                    candidateWindows(end + 1, 1) = candidate; %#ok<AGROW>
+                    candidateIndex = timewindow.TimeWindowManager.insertWindowIntoIndex(candidateIndex, candidate);
+                    currentTime = dwellEndTime;
+                end
+
                 segmentLength = norm(endNode - startNode);
                 if segmentLength <= eps
                     continue;
@@ -133,9 +192,35 @@ classdef TimeWindowManager < handle
                 edgeIndex = [startNode, endNode];
                 direction = timewindow.TimeWindowManager.computeDirection(startNode, endNode);
                 endTime = currentTime + segmentLength / speed;
-                candidate = timewindow.TimeWindowManager.buildWindow( ...
-                    edgeIndex, currentTime, endTime, agvId, direction);
+                segmentWindows = [ ...
+                    timewindow.TimeWindowManager.buildNodeWindow(startNode, currentTime, endTime, agvId); ...
+                    timewindow.TimeWindowManager.buildWindow(edgeIndex, currentTime, endTime, agvId, direction); ...
+                    timewindow.TimeWindowManager.buildNodeWindow(endNode, currentTime, endTime, agvId)];
 
+                for j = 1:numel(segmentWindows)
+                    candidate = segmentWindows(j);
+                    [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], activeIndex);
+                    if ~hasConflict
+                        [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], invalidatedIndex);
+                    end
+                    if ~hasConflict
+                        [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], candidateIndex);
+                    end
+                    if hasConflict
+                        reservedWindows = timewindow.TimeWindowManager.emptyWindowArray();
+                        return;
+                    end
+
+                    candidateWindows(end + 1, 1) = candidate; %#ok<AGROW>
+                    candidateIndex = timewindow.TimeWindowManager.insertWindowIntoIndex(candidateIndex, candidate);
+                end
+                currentTime = endTime;
+            end
+
+            finalDwellEndTime = currentTime + nodeDwellTimes(end);
+            if finalDwellEndTime > currentTime
+                candidate = timewindow.TimeWindowManager.buildNodeWindow( ...
+                    double(path(end, :)), currentTime, finalDwellEndTime, agvId);
                 [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], activeIndex);
                 if ~hasConflict
                     [hasConflict, conflictInfo] = obj.detectConflict(candidate, [], invalidatedIndex);
@@ -149,8 +234,6 @@ classdef TimeWindowManager < handle
                 end
 
                 candidateWindows(end + 1, 1) = candidate; %#ok<AGROW>
-                candidateIndex = timewindow.TimeWindowManager.insertWindowIntoIndex(candidateIndex, candidate);
-                currentTime = endTime;
             end
 
             if isempty(candidateWindows)
@@ -177,12 +260,14 @@ classdef TimeWindowManager < handle
             end
 
             invalidated = timewindow.TimeWindowManager.emptyWindowArray();
-            if isempty(obj.timeWindows)
+            if isempty(obj.timeWindows) || isempty(path)
                 return;
             end
 
             releaseEdges = timewindow.TimeWindowManager.pathToEdgeIndexList(path);
             releaseKeySet = timewindow.TimeWindowManager.edgeKeySet(releaseEdges, false);
+            releaseNodeSet = timewindow.TimeWindowManager.nodeKeySet(path);
+            currentNode = double(path(1, :));
             keepMask = true(numel(obj.timeWindows), 1);
 
             for i = 1:numel(obj.timeWindows)
@@ -190,15 +275,19 @@ classdef TimeWindowManager < handle
                 if existing.agvId ~= agvId || existing.endTime <= blockStartTime
                     continue;
                 end
-                if ~isKey(releaseKeySet, timewindow.TimeWindowManager.getDirectedEdgeKey(existing.edgeIndex))
+                if strcmp(existing.windowType, 'node') && isequal(existing.nodeIndex, currentNode) && ...
+                        existing.startTime <= blockStartTime && blockStartTime < existing.endTime
+                    continue;
+                end
+                if ~timewindow.TimeWindowManager.windowMatchesPath(existing, releaseKeySet, releaseNodeSet)
                     continue;
                 end
 
                 keepMask(i) = false;
                 invalidStart = max(existing.startTime, blockStartTime);
                 if invalidStart < existing.endTime
-                    blockedWindow = timewindow.TimeWindowManager.buildWindow( ...
-                        existing.edgeIndex, invalidStart, existing.endTime, 0, existing.direction);
+                    blockedWindow = timewindow.TimeWindowManager.cloneWindowWithTiming( ...
+                        existing, invalidStart, existing.endTime, 0);
                     invalidated(end + 1, 1) = blockedWindow; %#ok<AGROW>
                 end
             end
@@ -234,12 +323,13 @@ classdef TimeWindowManager < handle
             validateattributes(path, {'numeric'}, {'2d', 'ncols', 2, 'finite'});
             releaseEdges = timewindow.TimeWindowManager.pathToEdgeIndexList(path);
             releaseKeySet = timewindow.TimeWindowManager.edgeKeySet(releaseEdges, false);
+            releaseNodeSet = timewindow.TimeWindowManager.nodeKeySet(path);
 
             for i = 1:numel(obj.timeWindows)
                 if obj.timeWindows(i).agvId ~= agvId
                     continue;
                 end
-                if isKey(releaseKeySet, timewindow.TimeWindowManager.getDirectedEdgeKey(obj.timeWindows(i).edgeIndex))
+                if timewindow.TimeWindowManager.windowMatchesPath(obj.timeWindows(i), releaseKeySet, releaseNodeSet)
                     keepMask(i) = false;
                 end
             end
@@ -258,10 +348,12 @@ classdef TimeWindowManager < handle
             %EMPTYWINDOWARRAY Return an empty window struct array.
             windows = repmat(struct( ...
                 'edgeIndex', zeros(1, 4), ...
+                'nodeIndex', zeros(1, 2), ...
                 'startTime', 0, ...
                 'endTime', 0, ...
                 'agvId', 0, ...
-                'direction', 0), 0, 1);
+                'direction', 0, ...
+                'windowType', 'edge'), 0, 1);
         end
 
         function indexMap = emptyWindowIndex()
@@ -310,10 +402,30 @@ classdef TimeWindowManager < handle
 
             window = struct( ...
                 'edgeIndex', double(edgeIndex(:))', ...
+                'nodeIndex', zeros(1, 2), ...
                 'startTime', double(startTime), ...
                 'endTime', double(endTime), ...
                 'agvId', double(agvId), ...
-                'direction', double(direction));
+                'direction', double(direction), ...
+                'windowType', 'edge');
+        end
+
+        function window = buildNodeWindow(nodeIndex, startTime, endTime, agvId)
+            %BUILDNODEWINDOW Create and validate a node occupancy window.
+            validateattributes(nodeIndex, {'numeric'}, {'vector', 'numel', 2, 'finite'});
+            validateattributes(startTime, {'numeric'}, {'scalar', 'finite', 'nonnegative'});
+            validateattributes(endTime, {'numeric'}, {'scalar', 'finite', '>', startTime});
+            validateattributes(agvId, {'numeric'}, {'scalar', 'integer', '>=', 0});
+
+            nodeIndex = double(nodeIndex(:))';
+            window = struct( ...
+                'edgeIndex', [nodeIndex, nodeIndex], ...
+                'nodeIndex', nodeIndex, ...
+                'startTime', double(startTime), ...
+                'endTime', double(endTime), ...
+                'agvId', double(agvId), ...
+                'direction', -1, ...
+                'windowType', 'node');
         end
 
         function tf = hasTimeOverlap(startA, endA, startB, endB)
@@ -341,16 +453,26 @@ classdef TimeWindowManager < handle
                     'Time window structs must define edgeIndex, startTime, endTime, agvId, and direction.');
             end
 
-            window = timewindow.TimeWindowManager.buildWindow( ...
-                window.edgeIndex, window.startTime, window.endTime, window.agvId, window.direction);
+            if isfield(window, 'windowType') && strcmp(char(string(window.windowType)), 'node')
+                if isfield(window, 'nodeIndex') && ~isempty(window.nodeIndex)
+                    nodeIndex = window.nodeIndex;
+                else
+                    nodeIndex = window.edgeIndex(1:2);
+                end
+                window = timewindow.TimeWindowManager.buildNodeWindow( ...
+                    nodeIndex, window.startTime, window.endTime, window.agvId);
+            else
+                window = timewindow.TimeWindowManager.buildWindow( ...
+                    window.edgeIndex, window.startTime, window.endTime, window.agvId, window.direction);
+            end
         end
 
         function indexMap = buildWindowIndex(windows)
-            %BUILDWINDOWINDEX Group windows by undirected edge and sort by time.
+            %BUILDWINDOWINDEX Group edge/node windows by resource and sort by time.
             indexMap = timewindow.TimeWindowManager.emptyWindowIndex();
             for i = 1:numel(windows)
                 window = timewindow.TimeWindowManager.normalizeWindow(windows(i));
-                key = timewindow.TimeWindowManager.getUndirectedEdgeKey(window.edgeIndex);
+                key = timewindow.TimeWindowManager.getWindowResourceKey(window);
                 if isKey(indexMap, key)
                     indexedWindows = indexMap(key);
                     indexedWindows(end + 1, 1) = window; %#ok<AGROW>
@@ -367,9 +489,9 @@ classdef TimeWindowManager < handle
         end
 
         function indexMap = insertWindowIntoIndex(indexMap, window)
-            %INSERTWINDOWINTOINDEX Insert one normalized window into an edge index.
+            %INSERTWINDOWINTOINDEX Insert one normalized window into an index.
             window = timewindow.TimeWindowManager.normalizeWindow(window);
-            key = timewindow.TimeWindowManager.getUndirectedEdgeKey(window.edgeIndex);
+            key = timewindow.TimeWindowManager.getWindowResourceKey(window);
             if isKey(indexMap, key)
                 indexedWindows = indexMap(key);
                 indexedWindows(end + 1, 1) = window; %#ok<AGROW>
@@ -381,14 +503,15 @@ classdef TimeWindowManager < handle
         end
 
         function [hasConflict, existingWindow] = findConflictInIndex(newWindow, indexMap)
-            %FINDCONFLICTININDEX Check a candidate against windows on the same edge.
+            %FINDCONFLICTININDEX Check a candidate against same resource windows.
             hasConflict = false;
             existingWindow = timewindow.TimeWindowManager.emptyWindowArray();
             if isempty(indexMap)
                 return;
             end
 
-            key = timewindow.TimeWindowManager.getUndirectedEdgeKey(newWindow.edgeIndex);
+            newWindow = timewindow.TimeWindowManager.normalizeWindow(newWindow);
+            key = timewindow.TimeWindowManager.getWindowResourceKey(newWindow);
             if ~isKey(indexMap, key)
                 return;
             end
@@ -443,6 +566,22 @@ classdef TimeWindowManager < handle
             key = timewindow.TimeWindowManager.getDirectedEdgeKey(edgeIndex);
         end
 
+        function key = getNodeKey(nodeIndex)
+            %GETNODEKEY Convert a node coordinate into a stable key string.
+            nodeIndex = double(nodeIndex(:))';
+            key = sprintf('%d_%d', nodeIndex(1), nodeIndex(2));
+        end
+
+        function key = getWindowResourceKey(window)
+            %GETWINDOWRESOURCEKEY Return the conflict resource key for a window.
+            window = timewindow.TimeWindowManager.normalizeWindow(window);
+            if strcmp(window.windowType, 'node')
+                key = ['node:', timewindow.TimeWindowManager.getNodeKey(window.nodeIndex)];
+            else
+                key = ['edge:', timewindow.TimeWindowManager.getUndirectedEdgeKey(window.edgeIndex)];
+            end
+        end
+
         function keySet = edgeKeySet(edgeList, useUndirectedKey)
             %EDGEKEYSET Convert an edge list into a lookup map of edge keys.
             if nargin < 2 || isempty(useUndirectedKey)
@@ -457,6 +596,36 @@ classdef TimeWindowManager < handle
                     key = timewindow.TimeWindowManager.getDirectedEdgeKey(edgeList(i, :));
                 end
                 keySet(key) = true;
+            end
+        end
+
+        function keySet = nodeKeySet(path)
+            %NODEKEYSET Convert path nodes into a lookup map of node keys.
+            keySet = containers.Map('KeyType', 'char', 'ValueType', 'logical');
+            for i = 1:size(path, 1)
+                keySet(timewindow.TimeWindowManager.getNodeKey(path(i, :))) = true;
+            end
+        end
+
+        function tf = windowMatchesPath(window, edgeKeySet, nodeKeySet)
+            %WINDOWMATCHESPATH Return true when a window belongs to a path.
+            window = timewindow.TimeWindowManager.normalizeWindow(window);
+            if strcmp(window.windowType, 'node')
+                tf = isKey(nodeKeySet, timewindow.TimeWindowManager.getNodeKey(window.nodeIndex));
+            else
+                tf = isKey(edgeKeySet, timewindow.TimeWindowManager.getDirectedEdgeKey(window.edgeIndex));
+            end
+        end
+
+        function window = cloneWindowWithTiming(window, startTime, endTime, agvId)
+            %CLONEWINDOWWITHTIMING Copy a window resource with new timing/owner.
+            window = timewindow.TimeWindowManager.normalizeWindow(window);
+            if strcmp(window.windowType, 'node')
+                window = timewindow.TimeWindowManager.buildNodeWindow( ...
+                    window.nodeIndex, startTime, endTime, agvId);
+            else
+                window = timewindow.TimeWindowManager.buildWindow( ...
+                    window.edgeIndex, startTime, endTime, agvId, window.direction);
             end
         end
     end

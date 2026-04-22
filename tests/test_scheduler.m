@@ -25,8 +25,16 @@ assert(nextTask.id == 1, 'getNextTask should return the top-ranked task.');
 assert(success, 'assignToAGV should succeed for the first task.');
 assert(strcmp(sourceLabel, 'library'), 'Scheduler should consult the path library before fallback planning.');
 assert(~isempty(assignedPath), 'Assigned path should not be empty.');
-assert(numel(assignedWindows) == size(assignedPath, 1) - 1, ...
-    'Reserved windows should match the number of path edges.');
+assignedEdgeWindows = assignedWindows(strcmp({assignedWindows.windowType}, 'edge'));
+assignedNodeWindows = assignedWindows(strcmp({assignedWindows.windowType}, 'node'));
+assert(numel(assignedEdgeWindows) == size(assignedPath, 1) - 1, ...
+    'Reserved edge windows should match the number of path edges.');
+assert(numel(assignedNodeWindows) >= size(assignedPath, 1), ...
+    'Reserved windows should include node occupancy windows.');
+assert(any(strcmp({assignedNodeWindows.windowType}, 'node') & ...
+    arrayfun(@(w) isequal(w.nodeIndex, tasks(1).start) && ...
+    abs((w.endTime - w.startTime) - agvPool(1).loadDuration) < 1e-9, assignedNodeWindows).'), ...
+    'Task assignment should reserve the loading node for the configured load duration.');
 assert(strcmp(tasks(1).status, 'assigned'), 'Assigned task status should be updated.');
 assert(isa(agvPool(1).currentTask, 'task.TaskClass') && agvPool(1).currentTask(1).id == 1, ...
     'AGV should reference the assigned task.');
@@ -118,6 +126,7 @@ agvHigh.setTimeWindows(highWindows);
 agvLow.assignTask(lowTask);
 agvLow.assignPath(lowDirectPath);
 agvLow.setTimeWindows(lowWindows);
+agvLow.isLoaded = true;
 
 manager = timewindow.TimeWindowManager();
 manager.timeWindows = [highWindows; lowWindows];

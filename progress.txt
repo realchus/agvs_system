@@ -362,3 +362,28 @@
 
 - `enableHeadlessMode=true` 表示无头运行；如需显示可视化，可在 `params.m` 中改为 `false`。
 - 完整场景中出现过 1 次临时任务分配失败日志，后续调度恢复并完成全部任务。
+
+## [2026-04-22] - Task: 扩展节点级时间窗
+
+### What was done:
+
+- 扩展 `+timewindow/TimeWindowManager.m`，时间窗结构新增 `windowType` 和 `nodeIndex`，同时支持边窗口与节点窗口。
+- `reservePath` 现在会为路径边段生成边窗口，并为每个边段端点生成节点占用窗口，检测同一节点同一时间被不同 AGV 占用的冲突。
+- 新增可选 `nodeDwellTimes` 参数，用于把任务起点装货、中间装货和终点卸货的驻留时间写入节点窗口。
+- 更新 `+scheduler/SchedulerClass.m`，任务分配、等待避让和重规划时都会根据 AGV 装载状态生成节点驻留时间；已装货 AGV 重规划时不会重复预留起点装货时间。
+- 调整动态避障路径失效逻辑，保留 AGV 当前所在节点窗口，避免新绕行路径被自己的失效节点窗口阻塞。
+- 重新生成 `data/path_library.mat`，候选路径库中的时间窗元数据包含节点窗口。
+- 更新 `tests/test_timewindow.m`、`tests/test_scheduler.m` 和 `tests/test_pathlibrary.m`，覆盖节点冲突、节点驻留、路径库节点窗口和任务装货节点预留。
+
+### Testing:
+
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过。
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_dwa"`，结果通过。
+- 运行完整测试集 `test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario; test_performance`，结果全部通过。
+- 默认 10 AGV / 30 任务场景完成时间 `3560s`，完成任务数 `30`，碰撞次数 `0`。
+
+### Notes:
+
+- 节点级时间窗比原边级模型更严格，性能测试单次 wall-clock 耗时约 `45.23s`。
+- 完整场景仍有 1 次临时任务分配失败日志，后续调度恢复并完成全部任务。

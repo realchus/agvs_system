@@ -134,8 +134,9 @@ classdef SchedulerClass < handle
                     continue;
                 end
 
+                nodeDwellTimes = obj.buildNodeDwellTimes(agvObj, taskObj, executablePath);
                 [reservedWindows, conflictInfo] = obj.timeWindowManager.reservePath( ...
-                    agvObj.id, executablePath, startTime, agvObj.speed);
+                    agvObj.id, executablePath, startTime, agvObj.speed, nodeDwellTimes);
                 if ~isempty(conflictInfo)
                     continue;
                 end
@@ -204,8 +205,9 @@ classdef SchedulerClass < handle
             delayAmount = delayedStartTime - originalStartTime;
 
             if delayAmount <= waitTimeout
+                waitDwellTimes = obj.buildNodeDwellTimes(adjustedAgv, adjustedTask, adjustedAgv.path);
                 [waitWindows, waitConflict] = obj.timeWindowManager.reservePath( ...
-                    adjustedAgv.id, adjustedAgv.path, delayedStartTime, adjustedAgv.speed);
+                    adjustedAgv.id, adjustedAgv.path, delayedStartTime, adjustedAgv.speed, waitDwellTimes);
                 if isempty(waitConflict)
                     adjustedAgv.assignPath(adjustedAgv.path);
                     adjustedAgv.setTimeWindows(waitWindows);
@@ -472,8 +474,9 @@ classdef SchedulerClass < handle
                     continue;
                 end
 
+                nodeDwellTimes = obj.buildNodeDwellTimes(agvObj, taskObj, candidateNodes);
                 [reservedWindows, conflictDetails] = obj.timeWindowManager.reservePath( ...
-                    agvObj.id, candidateNodes, currentTime, agvObj.speed);
+                    agvObj.id, candidateNodes, currentTime, agvObj.speed, nodeDwellTimes);
                 if ~isempty(conflictDetails)
                     continue;
                 end
@@ -490,8 +493,9 @@ classdef SchedulerClass < handle
                 return;
             end
 
+            nodeDwellTimes = obj.buildNodeDwellTimes(agvObj, taskObj, fallbackPath);
             [reservedWindows, conflictDetails] = obj.timeWindowManager.reservePath( ...
-                agvObj.id, fallbackPath, currentTime, agvObj.speed);
+                agvObj.id, fallbackPath, currentTime, agvObj.speed, nodeDwellTimes);
             if ~isempty(conflictDetails)
                 return;
             end
@@ -554,6 +558,45 @@ classdef SchedulerClass < handle
             end
 
             executablePath = [double(repositionPath); double(taskRoute(2:end, :))];
+        end
+
+        function nodeDwellTimes = buildNodeDwellTimes(~, agvObj, taskObj, pathNodes)
+            %BUILDNODEDWELLTIMES Add load/unload service durations to path nodes.
+            nodeDwellTimes = zeros(size(pathNodes, 1), 1);
+            if isempty(taskObj) || isempty(pathNodes)
+                return;
+            end
+
+            servicePositions = agv.AGVClass.removeSequentialDuplicates( ...
+                [taskObj.start; taskObj.getWaypointPositions()]);
+            if isempty(servicePositions)
+                return;
+            end
+
+            currentIndex = 1;
+            for i = 1:size(servicePositions, 1)
+                matchedIndex = 0;
+                for j = currentIndex:size(pathNodes, 1)
+                    if isequal(double(pathNodes(j, :)), double(servicePositions(i, :)))
+                        matchedIndex = j;
+                        break;
+                    end
+                end
+                if matchedIndex == 0
+                    continue;
+                end
+
+                if i < size(servicePositions, 1)
+                    if i == 1 && agvObj.isLoaded
+                        currentIndex = matchedIndex + 1;
+                        continue;
+                    end
+                    nodeDwellTimes(matchedIndex) = nodeDwellTimes(matchedIndex) + agvObj.loadDuration;
+                else
+                    nodeDwellTimes(matchedIndex) = nodeDwellTimes(matchedIndex) + agvObj.unloadDuration;
+                end
+                currentIndex = matchedIndex + 1;
+            end
         end
     end
 
