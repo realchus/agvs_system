@@ -1,235 +1,235 @@
-﻿# 寮€鍙戣繘搴︽棩蹇?
+﻿# 开发进度日志
 
 ## [2025-03-14] - Initialization
 
 ### What was done:
 
-- 鍒涘缓椤圭洰缁撴瀯鏂囨。锛歚architecture.md`銆乣AGENTS.md`銆乣progress.txt`銆乣task.json`
-- 瀹氫箟椤圭洰鐩綍缁撴瀯
-- 鍒楀嚭鍏ㄩ儴 12 涓紑鍙戜换鍔?
+- 创建项目结构文档：`architecture.md`、`AGENTS.md`、`progress.txt`、`task.json`
+- 定义项目目录结构
+- 列出全部 12 个开发任务
 
 ### Testing:
 
-- 鏆傛棤浠ｇ爜娴嬭瘯锛屼粎瀹屾垚鍒濆鍖栨暣鐞?
+- 暂无代码测试，仅完成初始化整理
 
 ### Notes:
 
-- 涓嬩竴姝ュ彲寮€濮嬪疄鐜颁换鍔?1锛氬湴鍥惧缓妯?
-- 鎵€鏈変换鍔＄殑 `passes` 鍒濆鍊煎潎涓?`false`
+- 下一步可开始实现任务 1：地图建模
+- 所有任务的 `passes` 初始值均为 `false`
 
-## [2026-04-01] - Task: 鍦板浘寤烘ā
+## [2026-04-01] - Task: 地图建模
 
 ### What was done:
 
-- 鏂板 `+map/MapClass.m`锛屽疄鐜伴粯璁や粨搴撳湴鍥俱€侀鑹叉槧灏勩€丄GV 鍗犵敤绠＄悊銆佷换鍔＄洰鏍囩偣涓存椂寮€鏀惧拰鍦板浘鍙鍖?
-- 鏇存柊 `MAP.m`锛屾敼涓虹洿鎺ヨ皟鐢?`MapClass`
-- 鏂板 `tests/test_map.m`锛岃鐩栧湴鍥惧垵濮嬪寲銆侀€氳鎬с€丄GV 鍗犵敤鍜屽簭鍒楀寲
-- 鏂板 `data/createMapConfig.m`锛屽苟鐢熸垚 `data/map_config.mat`
+- 新增 `+map/MapClass.m`，实现默认仓库地图、颜色映射、AGV 占用管理、任务目标点临时开放和地图可视化
+- 更新 `MAP.m`，改为直接调用 `MapClass`
+- 新增 `tests/test_map.m`，覆盖地图初始化、通行性、AGV 占用和序列化
+- 新增 `data/createMapConfig.m`，并生成 `data/map_config.mat`
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createMapConfig"`锛屾垚鍔熺敓鎴?`data/map_config.mat`
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createMapConfig"`，成功生成 `data/map_config.mat`
 
 ### Notes:
 
-- 鍦板浘闈欐€佸竷灞€淇濆瓨鍦?`baseGrid`锛孉GV 鍔ㄦ€佸崰鐢ㄥ彔鍔犲湪 `grid`
-- 浠诲姟鐩爣鐐归€氳繃 `registerTaskTarget(taskId, positions)` 娉ㄥ叆锛屼緵璺緞瑙勫垝澶嶇敤
+- 地图静态布局保存到 `baseGrid`，AGV 动态占用叠加在 `grid`
+- 任务目标点通过 `registerTaskTarget(taskId, positions)` 注入，供路径规划复用
 
-## [2026-04-01] - Task: AGV寤烘ā
+## [2026-04-01] - Task: AGV建模
 
 ### What was done:
 
-- 鏂板 `+agv/AGVClass.m`锛屽疄鐜?AGV 灞炴€с€佷换鍔＄粦瀹氥€佽矾寰勫垎閰嶃€佽繛缁Щ鍔ㄣ€佽鍗歌鏃躲€佺姸鎬佹洿鏂板拰搴忓垪鍖?
-- 鏂板 `tests/test_agv.m`锛岃鐩栬矾寰勭Щ鍔ㄣ€佸埌杈捐妭鐐广€佽璐с€佸嵏璐у拰鐘舵€佸垏鎹?
-- 鏂板 `data/createAgvPool.m`锛屽苟鐢熸垚 `data/agv_pool.mat`
+- 新增 `+agv/AGVClass.m`，实现 AGV 属性、任务绑定、路径分配、连续移动、装卸计时、状态更新和序列化
+- 新增 `tests/test_agv.m`，覆盖路径移动、到达节点、装货、卸货和状态切换
+- 新增 `data/createAgvPool.m`，并生成 `data/agv_pool.mat`
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createAgvPool"`锛屾垚鍔熺敓鎴?`data/agv_pool.mat`
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createAgvPool"`，成功生成 `data/agv_pool.mat`
 
 ### Notes:
 
-- `move(dt)` 閲囩敤杩炵画浣嶇疆鎺ㄨ繘锛岃矾寰勮妭鐐逛繚鎸佹爡鏍间腑蹇冭〃绀?
-- `load` 鍜?`unload` 鏀寔鎸夋椂闂寸墖绱Н鎺ㄨ繘锛屼究浜庡悗缁豢鐪熷惊鐜皟鐢?
+- `move(dt)` 采用连续位置推进，路径节点保持栅格中心表示
+- `load` 和 `unload` 支持按时间片累积推进，便于后续仿真循环调用
 
-## [2026-04-01] - Task: 浠诲姟寤烘ā
+## [2026-04-01] - Task: 任务建模
 
 ### What was done:
 
-- 鍦ㄦ嬁鍒?5 涓换鍔″畾涔夊悗锛屾柊澧?`+task/TaskClass.m`锛屽疄鐜颁换鍔″睘鎬с€佽埅鐐瑰綊涓€鍖栥€佺姸鎬佹洿鏂板拰搴忓垪鍖?
-- 鏂板 `+task/TaskParser.m`锛屾敮鎸佷粠 JSON 鍜?MAT 涓ょ鏍煎紡鍔犺浇浠诲姟
-- 鏂板 `data/createTaskList.m`锛岀敓鎴?`data/task_list.json` 鍜?`data/task_list.mat`
-- 鏂板 `tests/test_task.m`锛岃鐩?JSON/MAT 瑙ｆ瀽銆佸瓧娈垫牎楠屽拰鐘舵€佹洿鏂?
+- 在拿到 5 个任务定义后，新增 `+task/TaskClass.m`，实现任务属性、航点归一化、状态更新和序列化
+- 新增 `+task/TaskParser.m`，支持从 JSON 和 MAT 两种格式加载任务
+- 新增 `data/createTaskList.m`，生成 `data/task_list.json` 和 `data/task_list.mat`
+- 新增 `tests/test_task.m`，覆盖 JSON/MAT 解析、字段校验和状态更新
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createTaskList"`锛屾垚鍔熺敓鎴?`data/task_list.json` 鍜?`data/task_list.mat`
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_task"`锛岀粨鏋滈€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createTaskList"`，成功生成 `data/task_list.json` 和 `data/task_list.mat`
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_task"`，结果通过
 
 ### Notes:
 
-- 5 涓换鍔＄殑 `priority` 鍒濆鍖栦负 `1`
-- 5 涓换鍔＄殑 `requestTime` 鍒濆鍖栦负 `0, 10, 20, 30, 40`
-- 鍒濆 `status` 缁熶竴璁剧疆涓?`pending`
+- 5 个任务的 `priority` 初始化为 `1`
+- 5 个任务的 `requestTime` 初始化为 `0, 10, 20, 30, 40`
+- 初始 `status` 统一设置为 `pending`
 
-## [2026-04-01] - Task: A*璺緞瑙勫垝
+## [2026-04-01] - Task: A*路径规划
 
 ### What was done:
 
-- 鏂板 `+pathplan/AStar.m`锛屽疄鐜?4 閭诲煙 A* 璺緞瑙勫垝
-- 浣跨敤鏇煎搱椤胯窛绂讳綔涓哄惎鍙戯紝骞舵寜 `f(n)=g(n)+(1+r/R)*h(n)` 璁＄畻鏀硅繘浠ｄ环
-- 璺緞瑙勫垝鐩存帴澶嶇敤 `MapClass.isPassable`锛岃嚜鍔ㄨ€冭檻 AGV 鍗犵敤鍜屼换鍔＄洰鏍囩偣寮€鏀?
-- 鏂板 `tests/test_astar.m`锛岃鐩栫洿绾胯矾寰勩€侀殰纰嶇粫琛屻€佸崰鐢ㄩ伩璁╁拰鐩爣鐐规巿鏉冭闂?
+- 新增 `+pathplan/AStar.m`，实现 4 邻域 A* 路径规划
+- 使用曼哈顿距离作为启发，并按 `f(n)=g(n)+(1+r/R)*h(n)` 计算改进代价
+- 路径规划直接复用 `MapClass.isPassable`，自动考虑 AGV 占用和任务目标点开放
+- 新增 `tests/test_astar.m`，覆盖直线路径、障碍绕行、占用避让和目标点授权访问
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_astar"`锛岀粨鏋滈€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_astar"`，结果通过
 
 ### Notes:
 
-- 褰撳墠寮€鏀鹃泦浣跨敤绾挎€ф壂鎻忛€夊彇鏈€灏?`f` 鍊硷紝鍚庣画濡傞渶鎬ц兘浼樺寲鍙浛鎹负浼樺厛闃熷垪
+- 当前开放集使用线性扫描选取最小 `f` 值，后续如需性能优化可替换为优先队列
 
-## [2026-04-01] - Task: 鏃堕棿绐楃鐞嗕笌鍐茬獊妫€娴?
+## [2026-04-01] - Task: 时间窗管理与冲突检测
 
 ### What was done:
 
-- 鏂板 `+timewindow/TimeWindowManager.m`锛屽疄鐜版椂闂寸獥缁撴瀯绠＄悊
-- 瀹炵幇 `addTimeWindow`銆乣detectConflict`銆乣reservePath` 鍜?`releasePath`
-- 缁熶竴鐢?`edgeIndex=[r1 c1 r2 c2]` 琛ㄧず璺緞杈规锛屽苟璁板綍寮€濮嬬粨鏉熸椂闂淬€丄GV 鍜屾柟鍚?
-- 鏂板 `tests/test_timewindow.m`锛岃鐩栧悓鍚戝啿绐併€佸弽鍚戝啿绐併€佹暣鏉¤矾寰勯鐣欏拰閲婃斁
+- 新增 `+timewindow/TimeWindowManager.m`，实现时间窗结构管理
+- 实现 `addTimeWindow`、`detectConflict`、`reservePath` 和 `releasePath`
+- 统一用 `edgeIndex=[r1 c1 r2 c2]` 表示路径边段，并记录开始结束时间、AGV 和方向
+- 新增 `tests/test_timewindow.m`，覆盖同向冲突、反向冲突、整条路径预留和释放
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`锛岀粨鏋滈€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_timewindow"`，结果通过
 
 ### Notes:
 
-- `reservePath` 閲囩敤鍘熷瓙寮忛鐣欙紝鍙璺緞涓换涓€杈规鍐茬獊灏变笉浼氬啓鍏ユ柊鏃堕棿绐?
-- 鏃堕棿鍖洪棿鎸夊乏闂彸寮€澶勭悊锛岄灏剧浉鎺ヤ笉瑙嗕负鍐茬獊
+- `reservePath` 采用原子式预留，只要路径中任一边段冲突就不会写入新时间窗
+- 时间区间按左闭右开处理，首尾相接不视为冲突
 
-## [2026-04-01] - Task: 鍗婄绾胯矾寰勫簱鐢熸垚
+## [2026-04-01] - Task: 半离线路径库生成
 
 ### What was done:
 
-- 鏂板 `+pathplan/PathLibrary.m`锛屽疄鐜板崟浠诲姟澶氬€欓€夎矾寰勭敓鎴愬拰鎵归噺璺緞搴撶敓鎴?
-- 涓烘瘡鏉″€欓€夎矾寰勯檮鍔犲熀浜庡浐瀹氶€熷害鎺ㄥ鍑虹殑鏃堕棿绐楀簭鍒?
-- 閫氳繃灞忚斀宸插彂鐜拌矾寰勭殑鍐呴儴鑺傜偣锛岀敓鎴愬彉浣撹矾寰?
-- 鏂板 `data/createPathLibrary.m`锛屽苟鐢熸垚 `data/path_library.mat`
-- 鏂板 `tests/test_pathlibrary.m`锛岃鐩栧璺緞鐢熸垚銆佹壒閲忕敓鎴愬拰鏁版嵁钀界洏
-- 璋冩暣 `+map/MapClass.m`锛屽厑璁稿綋鍓嶄换鍔℃敞鍐岀殑宸ヤ綔绐楀彛浣嶇疆閫氳锛屽苟琛ュ厖瀵瑰簲娴嬭瘯
+- 新增 `+pathplan/PathLibrary.m`，实现单任务多候选路径生成和批量路径库生成
+- 为每条候选路径附加基于固定速度推导出的时间窗序列
+- 通过屏蔽已发现路径的内部节点，生成变体路径
+- 新增 `data/createPathLibrary.m`，并生成 `data/path_library.mat`
+- 新增 `tests/test_pathlibrary.m`，覆盖候选路径生成、批量生成和数据落盘
+- 调整 `+map/MapClass.m`，允许当前任务注册的工作窗口位置通行，并补充对应测试
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_pathlibrary"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createPathLibrary"`锛屾垚鍔熺敓鎴?`data/path_library.mat`
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_pathlibrary"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'data')); createPathLibrary"`，成功生成 `data/path_library.mat`
 
 ### Notes:
 
-- 褰撳墠榛樿姣忎釜浠诲姟鏈€澶氱敓鎴?3 鏉″€欓€夎矾寰?
-- 鑻ュ湴鍥剧害鏉熶笅鏃犳硶鐢熸垚瓒冲澶氫笉鍚岃矾绾匡紝浼氫繚鐣欏凡鏈夊彲琛岃矾寰勫苟璁板綍瀹為檯鏁伴噺
+- 当前默认每个任务最多生成 3 条候选路径
+- 若地图约束下无法生成足够多不同路线，会保留已有可行路径并记录实际数量
 
-## [2026-04-01] - Task: 浠诲姟璋冨害鍣?
+## [2026-04-01] - Task: 任务调度器
 
 ### What was done:
 
-- 鏂板 `+scheduler/SchedulerClass.m`锛屽疄鐜拌皟搴﹀櫒鏍稿績缁撴瀯
-- 瀹炵幇 `updatePriority`銆乣getNextTask`銆乣assignToAGV`銆乣mergePickup` 鍜?`emergencyInsert`
-- 璋冨害閫昏緫鏀寔鈥滃熀纭€浼樺厛绾?+ 绛夊緟鏃堕棿鍔犳潈 + FIFO鈥濇帓搴?
-- 鍒嗛厤浠诲姟鏃朵紭鍏堜娇鐢ㄨ矾寰勫簱锛屽苟鍦ㄦ垚鍔熷悗鏇存柊鍏ㄥ眬鏃堕棿绐?
-- 鏂板 `tests/test_scheduler.m`锛岃鐩栦换鍔℃帓搴忋€佽矾寰勫簱浼樺厛鍒嗛厤銆侀『璺悎骞跺拰绱ф€ユ彃闃?
+- 新增 `+scheduler/SchedulerClass.m`，实现调度器核心结构
+- 实现 `updatePriority`、`getNextTask`、`assignToAGV`、`mergePickup` 和 `emergencyInsert`
+- 调度逻辑支持“基础优先级 + 等待时间加权 + FIFO”排序
+- 分配任务时优先使用路径库，并在成功后更新全局时间窗
+- 新增 `tests/test_scheduler.m`，覆盖任务排序、路径库优先分配、顺路合并和紧急插队
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`锛岀粨鏋滈€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过
 
 ### Notes:
 
-- 褰撳墠 `assignToAGV` 鍦ㄥ瓨鍦ㄨ矾寰勫簱鏃朵細浼樺厛灏濊瘯搴撲腑鐨勫€欓€夎矾寰勶紱鑻ヨ矾寰勫簱缂哄け锛屽垯鍥為€€鍒板熀浜?`AStar` 鐨勫崟璺緞鐢熸垚
-- 褰撳墠 `mergePickup` 浣跨敤鈥滀换鍔¤捣鐐逛笌鑸偣閮戒綅浜?AGV 鐜版湁璺緞涓婁笖椤哄簭涓€鑷粹€濅綔涓哄悎骞舵潯浠?
+- 当前 `assignToAGV` 在存在路径库时会优先尝试库中的候选路径；若路径库缺失，则回退到基于 `AStar` 的单路径生成
+- 当前 `mergePickup` 使用“任务起点与航点都位于 AGV 现有路径上且顺序一致”作为合并条件
 
-## [2026-04-01] - Task: 鍐茬獊瑙ｅ喅涓庨噸瑙勫垝
+## [2026-04-01] - Task: 冲突解决与重规划
 
 ### What was done:
 
-- 鎵╁睍 `+scheduler/SchedulerClass.m`锛屾柊澧?`handleConflict`锛屾敮鎸佹娴嬩袱杞﹀凡棰勭暀璺緞鐨勬椂闂寸獥鍐茬獊
-- 鎸変换鍔′紭鍏堢骇銆佽姹傛椂闂村拰 AGV ID 鍐冲畾淇濈暀鍘熻矾寰勭殑楂樹紭鍏堢骇杞﹁締涓庨渶瑕佽皟鏁寸殑浣庝紭鍏堢骇杞﹁締
-- 涓轰綆浼樺厛绾?AGV 瀹炵幇寤惰繜鍚姩绛栫暐锛氶噴鏀惧師鏃堕棿绐楀悗閲嶆柊棰勭暀鍚屼竴璺緞锛屾垚鍔熸椂鏇存柊涓?`waiting` 鐘舵€?
-- 涓虹瓑寰呭け璐ユ垨瓒呮椂鍦烘櫙瀹炵幇閲嶈鍒掞細浼樺厛灏濊瘯璺緞搴撲腑鐨勫叾浠栧€欓€夎矾寰勶紝鑻ユ棤鍙敤璺嚎鍒欏洖閫€鍒板啿绐佹劅鐭?A* 閲嶈鍒?
-- 鎵╁睍 `tests/test_scheduler.m`锛屾柊澧炰袱杞﹀啿绐佺殑绛夊緟娑堣В鍜屽鐢ㄨ矾寰勯噸瑙勫垝闆嗘垚鍦烘櫙
+- 扩展 `+scheduler/SchedulerClass.m`，新增 `handleConflict`，支持检测两车已预留路径的时间窗冲突
+- 按任务优先级、请求时间和 AGV ID 决定保留原路径的高优先级车辆与需要调整的低优先级车辆
+- 为低优先级 AGV 实现延迟启动策略：释放原时间窗后重新预留同一路径，成功时更新为 `waiting` 状态
+- 为等待失败或超时场景实现重规划：优先尝试路径库中的其他候选路径，若无可用路线则回退到冲突感知 A* 重规划
+- 扩展 `tests/test_scheduler.m`，新增两车冲突的等待消解和备用路径重规划集成场景
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler"`锛岀粨鏋滃叏閮ㄩ€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scheduler"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler"`，结果全部通过
 
 ### Notes:
 
-- 褰撳墠鍐茬獊瑙ｅ喅閫昏緫闈㈠悜鈥滆矾寰勫凡鍒嗛厤銆佹椂闂寸獥宸查鐣欌€濈殑璋冨害闃舵锛屼究浜庡悗缁湪浠跨湡涓诲惊鐜腑鐩存帴璋冪敤
-- 閲嶈鍒掍紭鍏堝鐢ㄨ矾寰勫簱锛屽彧鏈夊€欓€夎矾寰勫潎涓嶅彲鐢ㄦ椂鎵嶅洖閫€鍒?A*
+- 当前冲突解决逻辑面向“路径已分配、时间窗已预留”的调度阶段，便于后续仿真主循环直接调用
+- 重规划优先复用路径库，只有候选路径均不可用时才回退到 A*
 
-## [2026-04-01] - Task: DWA灞€閮ㄩ伩闅滅畻娉曢泦鎴?
+## [2026-04-01] - Task: DWA局部避障算法集成
 
 ### What was done:
 
-- 鏂板 `+pathplan/DWAClass.m`锛屽疄鐜板眬閮ㄥ姩鎬佺獥鍙ｉ噰鏍枫€佸€欓€夋柟鍚戣瘎鍒嗗拰涓庡叏灞€璺緞鐨勯噸杩?
-- 鎵╁睍 `+agv/AGVClass.m`锛屽湪 `move(dt, context)` 涓敮鎸佹娴嬪墠鏂瑰姩鎬侀殰纰嶃€佽Е鍙?DWA 灞€閮ㄩ伩闅滃苟鏇挎崲鍓╀綑璺緞
-- 鎵╁睍 `+timewindow/TimeWindowManager.m`锛屾柊澧?`invalidatedWindows` 鍜?`invalidatePath`锛岀敤浜庡皢鍙楀姩鎬侀殰纰嶅奖鍝嶇殑鏃ц矾寰勬椂闂寸獥鏍囪涓轰笉鍙敤
-- 鏂板 `tests/test_dwa.m`锛岃鐩栧姩鎬侀殰纰嶈Е鍙戝眬閮ㄩ伩闅滐紝浠ュ強閬块殰鍚庡彂鐢熸椂闂寸獥鍐茬獊骞堕噸鏂拌鍒掑墿浣欒矾寰勪袱绫诲満鏅?
+- 新增 `+pathplan/DWAClass.m`，实现局部动态窗口采样、候选方向评分和与全局路径的重连
+- 扩展 `+agv/AGVClass.m`，在 `move(dt, context)` 中支持检测前方动态障碍、触发 DWA 局部避障并替换剩余路径
+- 扩展 `+timewindow/TimeWindowManager.m`，新增 `invalidatedWindows` 和 `invalidatePath`，用于将受动态障碍影响的旧路径时间窗标记为不可用
+- 新增 `tests/test_dwa.m`，覆盖动态障碍触发局部避障，以及避障后发生时间窗冲突并重新规划剩余路径两类场景
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_dwa"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv; test_timewindow; test_scheduler; test_dwa"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa"`锛岀粨鏋滃叏閮ㄩ€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_dwa"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_agv; test_timewindow; test_scheduler; test_dwa"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa"`，结果全部通过
 
 ### Notes:
 
-- 褰撳墠 DWA 瀹炵幇閲囩敤鈥滅煭瑙嗛噹閲囨牱 + A* 閲嶈繛鈥濈殑杞婚噺鏂规锛岄€傚悎褰撳墠鏍呮牸璺緞涓庝豢鐪熸鏋?
-- `AGV.move` 淇濇寔鍚戝悗鍏煎锛涙湭浼犲叆 `context` 鏃朵粛鎸夊師鏈夊浐瀹氳矾寰勬帹杩涢€昏緫杩愯
+- 当前 DWA 实现采用“短视野采样 + A* 重连”的轻量方案，适合当前栅格路径与仿真框架
+- `AGV.move` 保持向后兼容；未传入 `context` 时仍按原有固定路径推进逻辑运行
 
-## [2026-04-01] - Task: 浠跨湡涓诲惊鐜笌鍙鍖?
+## [2026-04-01] - Task: 仿真主循环与可视化
 
 ### What was done:
 
-- 鏂板 `+sim/Simulation.m`锛屽疄鐜扮鏁ｆ椂闂翠富寰幆銆佷换鍔″垎閰嶃€佸啿绐佸鐞嗐€丄GV 鏇存柊銆佽鍗歌妭鎷嶅拰浜嬩欢鏃ュ織
-- 鏂板 `+sim/Visualizer.m`锛屽疄鐜板湴鍥俱€丄GV銆佽矾寰勫拰鍔ㄦ€侀殰纰嶇殑瀹炴椂缁樺埗
-- 鏂板 `params.m`锛岀粺涓€鎻愪緵榛樿浠跨湡姝ラ暱銆佹€绘椂闀裤€佸彲瑙嗗寲寮€鍏炽€佺瓑寰呰秴鏃跺拰鍔ㄦ€侀殰纰嶉厤缃?
-- 鏂板 `main.m`锛屼綔涓洪粯璁や豢鐪熷叆鍙ｏ紝璇诲彇鍙傛暟骞跺惎鍔?`Simulation`
-- 璋冩暣 `+map/MapClass.m` 鐨?`setAGVOccupancy`锛屽厑璁告惡甯﹀綋鍓嶄换鍔?ID 浠ユ敮鎸佺洰鏍囩獥鍙ｄ綅缃崰鐢?
-- 璋冩暣 `+scheduler/SchedulerClass.m`锛屽尯鍒嗏€滄湭浼犺矾寰勫簱鈥濆拰鈥滄樉寮忎紶鍏ョ┖璺緞搴撯€濓紝渚夸簬灏忓湴鍥句豢鐪熸祴璇?
-- 鏂板 `tests/test_simulation.m`锛岃鐩栧崟浠诲姟瀹屾暣鎵ц鐢熷懡鍛ㄦ湡鍜屼豢鐪熸鍐呭啿绐佽В鍐抽泦鎴愬満鏅?
+- 新增 `+sim/Simulation.m`，实现离散时间主循环、任务分配、冲突处理、AGV 更新、装卸节拍和事件日志
+- 新增 `+sim/Visualizer.m`，实现地图、AGV、路径和动态障碍的实时绘制
+- 新增 `params.m`，统一提供默认仿真步长、总时长、可视化开关、等待超时和动态障碍配置
+- 新增 `main.m`，作为默认仿真入口，读取参数并启动 `Simulation`
+- 调整 `+map/MapClass.m` 的 `setAGVOccupancy`，允许携带当前任务 ID 以支持目标窗口位置占用
+- 调整 `+scheduler/SchedulerClass.m`，区分“未传路径库”和“显式传入空路径库”，便于小地图仿真测试
+- 新增 `tests/test_simulation.m`，覆盖单任务完整执行生命周期和仿真步内冲突解决集成场景
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation"`锛岀粨鏋滃叏閮ㄩ€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_simulation"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation"`，结果全部通过
 
 ### Notes:
 
-- 褰撳墠浠跨湡榛樿鏀寔鏃犵晫闈㈣繍琛岋紝渚夸簬娴嬭瘯锛涘紑鍚?`enableVisualization` 鍚庝細瀹炴椂缁樺埗鍦板浘鍜?AGV 杞ㄨ抗
-- 浠跨湡涓诲惊鐜凡缁忔帴鍏ヤ换鍔¤皟搴︺€佹椂闂寸獥鍐茬獊瑙ｅ喅鍜?DWA 灞€閮ㄩ伩闅滐紝瓒冲鏀拺涓嬩竴姝ュ畬鏁村満鏅祴璇?
+- 当前仿真默认支持无界面运行，便于测试；开启 `enableVisualization` 后会实时绘制地图和 AGV 轨迹
+- 仿真主循环已经接入任务调度、时间窗冲突解决和 DWA 局部避障，足够支撑下一步完整场景测试
 
-## [2026-04-01] - Task: 瀹屾暣浠诲姟鍦烘櫙娴嬭瘯
+## [2026-04-01] - Task: 完整任务场景测试
 
 ### What was done:
 
-- 璋冩暣 `+scheduler/SchedulerClass.m` 鐨勪换鍔″垎閰嶉€昏緫锛屼负闈炶捣鐐逛綅缃帴鍗曠殑 AGV 鑷姩琛ラ綈鈥滃綋鍓嶄綅缃埌浠诲姟璧风偣鈥濈殑鍙墽琛岃矾寰?
-- 璋冩暣 `+map/MapClass.m` 鐨?AGV 鍗犵敤鍚屾瑙勫垯锛屽厑璁镐豢鐪熷噯纭褰?AGV 鍋滅暀鍦ㄥ伐浣滅獥鍙ｇ瓑闈炶溅閬撶洰鏍囩偣鐨勪綅缃?
-- 鎵╁睍 `+sim/Simulation.m`锛屾柊澧炲満鏅寚鏍囨眹鎬伙細鎬昏€楁椂銆佺鎾炴鏁般€佸啿绐佽В鍐虫鏁般€侀噸瑙勫垝娆℃暟銆侀伩闅滄鏁般€佹瘡鍙?AGV 琛岄┒璺濈鍜屾瘡涓换鍔″畬鎴愭椂闂?
-- 鏂板 `tests/test_scenario.m`锛屼娇鐢ㄦ彁渚涚殑 5 涓换鍔″拰 3 鍙?AGV 杩愯瀹屾暣浠跨湡鍦烘櫙锛屽苟杈撳嚭鏈€缁堟姤鍛?
-- 鍦ㄥ畬鏁村満鏅腑鍔犲叆涓€涓彲閲嶅鍛戒腑鐨勫姩鎬侀殰纰嶄簨浠讹紝鐢ㄤ簬楠岃瘉 DWA 灞€閮ㄩ伩闅滃湪鏁村満浠跨湡涓殑瑙﹀彂鍜屾敹鏁?
+- 调整 `+scheduler/SchedulerClass.m` 的任务分配逻辑，为非起点位置接单的 AGV 自动补齐“当前位置到任务起点”的可执行路径
+- 调整 `+map/MapClass.m` 的 AGV 占用同步规则，允许仿真准确记录 AGV 停留在工作窗口等非车道目标点的位置
+- 扩展 `+sim/Simulation.m`，新增场景指标汇总：总耗时、碰撞次数、冲突解决次数、重规划次数、避障次数、每台 AGV 行驶距离和每个任务完成时间
+- 新增 `tests/test_scenario.m`，使用提供的 5 个任务和 3 台 AGV 运行完整仿真场景，并输出最终报告
+- 在完整场景中加入一个可重复命中的动态障碍事件，用于验证 DWA 局部避障在整场仿真中的触发和收敛
 
 ### Testing:
 
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`锛岀粨鏋滈€氳繃
-- 杩愯 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario"`锛岀粨鏋滃叏閮ㄩ€氳繃
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_scenario"`，结果通过
+- 运行 `matlab -batch "addpath(pwd); addpath(fullfile(pwd,'tests')); test_map; test_agv; test_task; test_astar; test_timewindow; test_pathlibrary; test_scheduler; test_dwa; test_simulation; test_scenario"`，结果全部通过
 
 ### Notes:
 
-- 鍦烘櫙娴嬭瘯閰嶇疆閲囩敤 `dt=1.0s`銆乣totalTime=260s`銆侀粯璁?5 浠诲姟涓?3 AGV锛屾渶缁堝湪 181 绉掑唴瀹屾垚鍏ㄩ儴浠诲姟
-- 鏈鍦烘櫙鎶ュ憡缁撴灉涓猴細纰版挒娆℃暟 `0`銆侀伩闅滄鏁?`1`銆佷换鍔″畬鎴愭椂闂村垎鍒负 `43, 56, 90, 144, 180` 绉?
+- 场景测试配置采用 `dt=1.0s`、`totalTime=260s`、默认 5 任务与 3 AGV，最终在 181 秒内完成全部任务
+- 本次场景报告结果为：碰撞次数 `0`、避障次数 `1`、任务完成时间分别为 `43, 56, 90, 144, 180` 秒
 
 ## [2026-04-01] - Task: 文档完善与性能优化
 
